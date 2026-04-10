@@ -1,0 +1,161 @@
+from stations_loader import load_stations_file
+import skspatial.objects as skso
+from minimum_energy_bspline import minimum_energy_bspline
+import numpy as np
+
+from freecad_functions import (makeFreeCADDocument, add_bspline_sketch, add_points_to_document)
+
+from geom_functions import planarize_and_extrapolate_chine, local_to_global, global_to_local
+from draw_frame import draw_frame
+from svg_frame_export import export_frames_to_svg
+
+
+
+
+#TODO: Better b-spline representation (knot vector, multiplicities, control points)
+
+KAYAK_NAME = 'SeaRoverST'
+
+
+data = load_stations_file(f'data/{KAYAK_NAME}.offsets')
+stations = data['stations']
+keelZ = data['keel_hab']
+chines = data['chines']
+if len(chines) == 0:
+    chinesX = np.empty((0, len(stations)))
+    chinesZ = np.empty((0, len(stations)))
+else:
+    chinesX = np.vstack([c['hb'] for c in chines])
+    chinesZ = np.vstack([c['hab'] for c in chines])
+deckridgeZ = data['deckridge']['hab']
+gunwaleX = data['gunwale']['hb']
+gunwaleZ = data['gunwale']['hab']
+
+if chinesX.ndim == 1:
+    chinesX.shape = (1, len(chinesX))
+if chinesZ.ndim == 1:
+    chinesZ.shape = (1, len(chinesZ))
+
+chine_bsplines = []
+chine_planes = []
+chine_points_list_2d = []
+plane_coords = []
+
+geom_dict = {}
+
+def process_chine(chineX, chineZ):
+    points = skso.Points([[chineX[i], stations[i], chineZ[i]] for i in range(len(stations))])
+
+    # Make the chine points coplanar, and approximate the bow and stern endpoints
+    threedpoints, twodpoints, chine_plane, local_coords, distances = planarize_and_extrapolate_chine(points)
+
+    for station_idx in range(len(stations)):
+        station_plane = skso.Plane(skso.Point([0, stations[station_idx], 0]), np.array([0,1,0]))
+        pt = station_plane.project_point(threedpoints[station_idx + 1])
+        threedpoints[station_idx + 1] = skso.Point([pt[0], stations[station_idx], pt[2]])
+        twodpoints[station_idx + 1] = global_to_local(pt, *local_coords)
+
+    #TODO: Check that point distances are acceptable
+    chine_bspline = minimum_energy_bspline(twodpoints)
+
+    return threedpoints, twodpoints, chine_bspline, chine_plane, local_coords, distances
+
+for idx in range(len(chinesX)):
+    chineX = chinesX[idx]
+    chineZ = chinesZ[idx]
+
+    chine_points_3d, chine_points_2d, chine_bspline, chine_plane, local_coords, distances = process_chine(chineX, chineZ)
+    chine_bsplines.append(chine_bspline)
+    chine_planes.append(chine_plane)
+    plane_coords.append(local_coords)
+    geom_dict[f'Chine{idx+1}'] = {
+        '2d_points': chine_points_2d,
+        '3d_points': chine_points_3d,
+        'bspline': chine_bspline,
+        'plane_normal': chine_plane.normal,
+        'plane_point': global_to_local(skso.Point((0,0,0)), *local_coords),
+        'distances': distances
+    }
+
+gunwale_points_3d, gunwale_points_2d, gunwale_bspline, gunwale_plane, gunwale_coords, gunwale_distances = process_chine(gunwaleX, gunwaleZ)
+geom_dict['Gunwale'] = {
+    '3d_points': gunwale_points_3d,
+    '2d_points': gunwale_points_2d,
+    'bspline': gunwale_bspline,
+    'plane_normal': gunwale_plane.normal,
+    'plane_point': global_to_local(skso.Point((0,0,0)), *gunwale_coords),
+    'distances': gunwale_distances
+}
+
+
+geom_dict['Keel'] = {
+    '3d_points': [skso.Point([0, stations[i], keelZ[i]]) for i in range(len(stations))],
+    '2d_points': [[0, keelZ[i]] for i in range(len(stations))],
+    'bspline': minimum_energy_bspline([[0, keelZ[i]] for i in range(len(stations))]),
+    'plane_normal': np.array([1,0,0]),
+    'plane_point': skso.Point([0,0,0]),
+    'distances': [0 for _ in range(len(stations))]
+}
+
+geom_dict['Deckridge'] = {
+    '3d_points': [skso.Point([0, stations[i], deckridgeZ[i]]) for i in range(len(stations))],
+    '2d_points': [[0, deckridgeZ[i]] for i in range(len(stations))],
+    'plane_normal': np.array([1,0,0]),
+    'plane_point': skso.Point([0,0,0]),
+    'distances': [0 for _ in range(len(stations))]
+}
+
+doc = makeFreeCADDocument(KAYAK_NAME)
+
+for idx, chine_bspline in enumerate(chine_bsplines):
+    chine_plane = chine_planes[idx]
+    chine_coords = plane_coords[idx]
+    add_bspline_sketch(doc, f'Chine{idx+1}', chine_coords, chine_bspline, geom_dict[f'Chine{idx+1}']['2d_points'])
+    add_points_to_document(doc, f'Chine{idx+1}', geom_dict[f'Chine{idx+1}']['3d_points'])
+add_bspline_sketch(doc, 'Gunwale', gunwale_coords, gunwale_bspline, geom_dict['Gunwale']['2d_points'])
+add_points_to_document(doc, 'Gunwale', geom_dict['Gunwale']['3d_points'])
+
+add_bspline_sketch(doc, 'Keel', [skso.Point([0,0,0])], geom_dict['Keel']['bspline'], geom_dict['Keel']['2d_points'], rotation=(0,1,0,270))
+
+doc.recompute()
+doc.saveAs(f'{KAYAK_NAME}_bsplines.FCStd')
+
+#TODO: Frame Drawing
+frame_lines = []
+
+for station_idx in range(len(stations)):
+
+    frame_lines.append(draw_frame(
+        geom_dict['Keel']['2d_points'][station_idx][1],  # keel_y
+        5,  # keel_width
+        30, # keel_depth
+        [
+            skso.Point([
+                geom_dict[f'Chine{i+1}']['3d_points'][station_idx + 1][0],
+                geom_dict[f'Chine{i+1}']['3d_points'][station_idx + 1][2]
+            ]) for i in range(len(chines))
+        ],
+        [geom_dict[f'Chine{i+1}']['plane_normal'][0] for i in range(len(chines))],
+        30,  # chine_depth
+        5,   # chine_width
+        skso.Point([geom_dict['Gunwale']['3d_points'][station_idx + 1][0], geom_dict['Gunwale']['3d_points'][station_idx + 1][2]]), # gunwale_pt
+        geom_dict['Gunwale']['plane_normal'][0], # gunwale_slope
+        30, # gunwale_depth
+        5,   # gunwale_width
+        skso.Point([geom_dict['Deckridge']['3d_points'][station_idx][0], geom_dict['Deckridge']['3d_points'][station_idx][2]]), # deckridge
+        30, # deckridge_depth
+        5,   # deckridge_width
+        0.1  # relief_arc_percentage
+    ))
+
+# Export frames to SVG files for CNC cutting
+export_frames_to_svg(
+    frames_list=frame_lines,
+    kayak_name=KAYAK_NAME,
+    output_dir='output/frames',
+    stroke_width=1.0,
+    stroke_color='black',
+    include_centerline=True,
+    include_metadata=True,
+    enforce_continuity=False  # Current geometry is not continuous, set to True when fixed
+)

@@ -1,0 +1,2 @@
+numpy>=1.19.0
+scikit-spatial>=1.0.0
