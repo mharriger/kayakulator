@@ -73,8 +73,19 @@ def draw_frame(keel_y: float, keel_width: float, keel_depth: float,
     pt_x = deckridge[0] - .5 * deckridge_width
     if (pt_x < 0): pt_x = 0
     l3 = LineSegment(l2.p2, (pt_x, pt_y - deckridge_depth))
+    lines.append(l3)
     if pt_x > 0:
         l4 = LineSegment(l3.p2, (l3.p2[0], l3.p2[1] + deckridge_depth))
         lines.append(l4)
         lines.append(LineSegment(l4.p2, (0, deckridge[1])))
+    
+    #Now draw the mirror image
+    linescopy = lines.copy()
+    linescopy.reverse()
+    for line in linescopy:
+        if isinstance(line, LineSegment):
+            lines.append(LineSegment((-line.p2[0], line.p2[1]), (-line.p1[0], line.p1[1])))
+        elif isinstance(line, ArcThreePoints):
+            lines.append(ArcThreePoints((-line.p3[0], line.p3[1]), (-line.p2[0], line.p2[1]), (-line.p1[0], line.p1[1])))
+    
     return lines
