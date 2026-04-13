@@ -127,8 +127,8 @@ for station_idx in range(len(stations)):
 
     frame_lines.append(draw_frame(
         geom_dict['Keel']['2d_points'][station_idx][1],  # keel_y
-        5,  # keel_width
-        30, # keel_depth
+        12.7,  # keel_width
+        25.4, #keel_depth
         [
             skso.Point([
                 geom_dict[f'Chine{i+1}']['3d_points'][station_idx + 1][0],
@@ -136,15 +136,15 @@ for station_idx in range(len(stations)):
             ]) for i in range(len(chines))
         ],
         [geom_dict[f'Chine{i+1}']['plane_normal'][0] for i in range(len(chines))],
-        30,  # chine_depth
-        5,   # chine_width
+        25.4,  # chine_depth
+        12.7,   # chine_width
         skso.Point([geom_dict['Gunwale']['3d_points'][station_idx + 1][0], geom_dict['Gunwale']['3d_points'][station_idx + 1][2]]), # gunwale_pt
         geom_dict['Gunwale']['plane_normal'][0], # gunwale_slope
-        30, # gunwale_depth
-        5,   # gunwale_width
+        25.4, # gunwale_depth
+        12.7,   # gunwale_width
         skso.Point([geom_dict['Deckridge']['3d_points'][station_idx][0], geom_dict['Deckridge']['3d_points'][station_idx][2]]), # deckridge
-        30, # deckridge_depth
-        5,   # deckridge_width
+        25.4, # deckridge_depth
+        12.7,   # deckridge_width
         0.1  # relief_arc_percentage
     ))
 
