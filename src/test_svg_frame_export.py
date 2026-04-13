@@ -13,7 +13,7 @@ from geom_primitives import LineSegment, ArcThreePoints
 from svg_frame_export import (
     SVGPath, convert_line_segment_to_svg, convert_arc_three_points_to_svg,
     validate_path_continuity, calculate_arc_from_three_points,
-    export_frames_to_svg
+    calculate_frame_bounds, export_frames_to_svg
 )
 
 
@@ -230,66 +230,93 @@ class TestPathContinuity(unittest.TestCase):
 class TestBoundsCalculation(unittest.TestCase):
     """Test bounds calculation for SVG viewBox."""
     
-    def test_single_line_bounds(self):
-        """Test bounds calculation for single line segment."""
+    def test_single_line_bounds_with_margin(self):
+        """Test bounds calculation for single line segment with 20mm margin."""
         frame = [LineSegment((10, 20), (30, 40))]
+        bounds = calculate_frame_bounds(frame)
         
-        # Calculate bounds inline as export_frames_to_svg does
-        x_coords = [10, 30]
-        y_coords = [20, 40]
-        bounds = {
-            'x_min': min(x_coords),
-            'x_max': max(x_coords),
-            'y_min': min(y_coords),
-            'y_max': max(y_coords)
-        }
+        # Bounds should extend 20mm in each direction
+        self.assertEqual(bounds['x_min'], -10.0)  # 10 - 20
+        self.assertEqual(bounds['x_max'], 50.0)   # 30 + 20
+        self.assertEqual(bounds['y_min'], 0.0)    # 20 - 20
+        self.assertEqual(bounds['y_max'], 60.0)   # 40 + 20
+    
+    def test_single_line_bounds_scenario_from_spec(self):
+        """Test the exact scenario from specification."""
+        # Spec: LineSegment from (10, 20) to (50, 80)
+        # Expected: x_min: -10, x_max: 70, y_min: 0, y_max: 100
+        frame = [LineSegment((10, 20), (50, 80))]
+        bounds = calculate_frame_bounds(frame)
         
-        self.assertEqual(bounds['x_min'], 10)
-        self.assertEqual(bounds['x_max'], 30)
-        self.assertEqual(bounds['y_min'], 20)
-        self.assertEqual(bounds['y_max'], 40)
+        self.assertEqual(bounds['x_min'], -10.0)
+        self.assertEqual(bounds['x_max'], 70.0)
+        self.assertEqual(bounds['y_min'], 0.0)
+        self.assertEqual(bounds['y_max'], 100.0)
     
     def test_multiple_geometry_bounds(self):
-        """Test bounds for multiple geometric objects."""
+        """Test bounds for multiple geometric objects with margin."""
         frame = [
             LineSegment((0, 0), (10, 10)),
             LineSegment((5, -5), (15, 15)),
         ]
+        bounds = calculate_frame_bounds(frame)
         
-        x_coords = [0, 10, 5, 15]
-        y_coords = [0, 10, -5, 15]
-        bounds = {
-            'x_min': min(x_coords),
-            'x_max': max(x_coords),
-            'y_min': min(y_coords),
-            'y_max': max(y_coords)
-        }
-        
-        self.assertEqual(bounds['x_min'], 0)
-        self.assertEqual(bounds['x_max'], 15)
-        self.assertEqual(bounds['y_min'], -5)
-        self.assertEqual(bounds['y_max'], 15)
+        # Extent: x [0, 15], y [-5, 15]
+        # With margin: x [-20, 35], y [-25, 35]
+        self.assertEqual(bounds['x_min'], -20.0)
+        self.assertEqual(bounds['x_max'], 35.0)
+        self.assertEqual(bounds['y_min'], -25.0)
+        self.assertEqual(bounds['y_max'], 35.0)
     
-    def test_arc_bounds(self):
-        """Test bounds including arc geometry."""
+    def test_arc_bounds_with_margin(self):
+        """Test bounds including arc geometry with margin."""
         frame = [
             LineSegment((0, 0), (10, 10)),
             ArcThreePoints((10, 10), (15, 15), (20, 20)),
         ]
+        bounds = calculate_frame_bounds(frame)
         
-        x_coords = [0, 10, 10, 15, 20]
-        y_coords = [0, 10, 10, 15, 20]
-        bounds = {
-            'x_min': min(x_coords),
-            'x_max': max(x_coords),
-            'y_min': min(y_coords),
-            'y_max': max(y_coords)
-        }
+        # All points: (0,0), (10,10), (10,10), (15,15), (20,20)
+        # Extent: x [0, 20], y [0, 20]
+        # With 20mm margin: x [-20, 40], y [-20, 40]
+        self.assertEqual(bounds['x_min'], -20.0)
+        self.assertEqual(bounds['x_max'], 40.0)
+        self.assertEqual(bounds['y_min'], -20.0)
+        self.assertEqual(bounds['y_max'], 40.0)
+    
+    def test_negative_coordinates_with_margin(self):
+        """Test bounds with negative coordinates (spec scenario)."""
+        # Spec: frame geometry spans from (-50, -20) to (50, 80)
+        # Expected: x_min: -70, x_max: 70, y_min: -40, y_max: 100
+        frame = [
+            LineSegment((-50, -20), (50, 80)),
+        ]
+        bounds = calculate_frame_bounds(frame)
         
-        self.assertEqual(bounds['x_min'], 0)
-        self.assertEqual(bounds['x_max'], 20)
-        self.assertEqual(bounds['y_min'], 0)
-        self.assertEqual(bounds['y_max'], 20)
+        self.assertEqual(bounds['x_min'], -70.0)
+        self.assertEqual(bounds['x_max'], 70.0)
+        self.assertEqual(bounds['y_min'], -40.0)
+        self.assertEqual(bounds['y_max'], 100.0)
+    
+    def test_bounds_empty_frame_raises_error(self):
+        """Test that empty frame geometry raises ValueError."""
+        frame = []
+        with self.assertRaises(ValueError):
+            calculate_frame_bounds(frame)
+    
+    def test_bounds_width_and_height_calculation(self):
+        """Test that viewBox width and height are correct."""
+        frame = [LineSegment((0, 0), (100, 50))]
+        bounds = calculate_frame_bounds(frame)
+        
+        # Extent: x [0, 100], y [0, 50]
+        # With 20mm margin: x [-20, 120], y [-20, 70]
+        # Width: 140, Height: 90
+        width = bounds['x_max'] - bounds['x_min']
+        height = bounds['y_max'] - bounds['y_min']
+        
+        self.assertEqual(width, 140.0)
+        self.assertEqual(height, 90.0)
 
 
 

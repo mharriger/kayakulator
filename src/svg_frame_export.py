@@ -8,11 +8,14 @@ The module handles:
 - Conversion of geometric primitives to SVG path commands
 - Output of frame geometry at original dimensions (no scaling applied)
 - Continuous SVG path generation with all frame elements in single path element
+- Dynamic bounding box calculation with 20mm margin for fabrication clearance
 - Visual enhancements (centerline, labels, annotations)
 - Batch export of multiple frames to individual files
 
 IMPORTANT: Frame geometry is exported at its original dimensions without any scaling.
 All frame elements are combined into a single continuous SVG <path> element.
+The SVG viewBox is automatically sized to the frame geometry extent plus a 20mm
+margin on all sides.
 
 Usage Example:
     from geom_primitives import LineSegment, ArcThreePoints
@@ -25,6 +28,7 @@ Usage Example:
     ]
     
     # Export to SVG files
+    # The bounding box is automatically calculated with 20mm margin
     export_frames_to_svg(
         frames_list=[frame_1],
         kayak_name='SeaRoverST',
@@ -46,6 +50,71 @@ from geom_primitives import LineSegment, ArcThreePoints
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Margin to apply around frame geometry extent (in mm)
+FRAME_BOUNDS_MARGIN = 20.0
+
+
+def calculate_frame_bounds(frame_geometry: List) -> Dict[str, float]:
+    """Calculate the bounding box of frame geometry with margin.
+    
+    Computes the minimal bounding box that encompasses all frame geometry
+    (LineSegment and ArcThreePoints objects) and applies a uniform margin
+    on all sides.
+    
+    Args:
+        frame_geometry: List of LineSegment and ArcThreePoints objects
+        
+    Returns:
+        Dictionary with keys: x_min, x_max, y_min, y_max representing
+        the bounds of the geometry including margin
+        
+    Raises:
+        ValueError: If frame_geometry is empty
+        
+    Example:
+        >>> frame = [LineSegment((10, 20), (50, 80))]
+        >>> bounds = calculate_frame_bounds(frame)
+        >>> bounds['x_min']
+        -10.0
+        >>> bounds['x_max']
+        70.0
+    """
+    if not frame_geometry:
+        raise ValueError("Frame geometry cannot be empty")
+    
+    # Collect all x and y coordinates from geometry elements
+    x_coords = []
+    y_coords = []
+    
+    for geom in frame_geometry:
+        if isinstance(geom, LineSegment):
+            x_coords.extend([geom.p1[0], geom.p2[0]])
+            y_coords.extend([geom.p1[1], geom.p2[1]])
+        elif isinstance(geom, ArcThreePoints):
+            # Use all three points (conservative approach, doesn't account for arc bulge)
+            x_coords.extend([geom.p1[0], geom.p2[0], geom.p3[0]])
+            y_coords.extend([geom.p1[1], geom.p2[1], geom.p3[1]])
+    
+    # Find extent
+    if not x_coords or not y_coords:
+        raise ValueError("No coordinates found in frame geometry")
+    
+    extent_x_min = min(x_coords)
+    extent_x_max = max(x_coords)
+    extent_y_min = min(y_coords)
+    extent_y_max = max(y_coords)
+    
+    # Apply margin
+    bounds = {
+        'x_min': extent_x_min - FRAME_BOUNDS_MARGIN,
+        'x_max': extent_x_max + FRAME_BOUNDS_MARGIN,
+        'y_min': extent_y_min - FRAME_BOUNDS_MARGIN,
+        'y_max': extent_y_max + FRAME_BOUNDS_MARGIN,
+    }
+    
+    logger.debug(f"Computed frame bounds: {bounds}")
+    return bounds
 
 
 class SVGPath:
@@ -421,6 +490,10 @@ def export_frames_to_svg(frames_list: List[List], kayak_name: str,
     Exports all frame geometry as a single continuous SVG path element
     at its original dimensions without any scaling.
     
+    The SVG viewBox and dimensions are dynamically calculated based on the
+    frame geometry extent with a 20mm margin applied on all sides for
+    fabrication clearance.
+    
     Args:
         frames_list: List of frame geometry lists (each frame is a list of LineSegment/ArcThreePoints)
         kayak_name: Name of the kayak design (used in filenames)
@@ -434,6 +507,11 @@ def export_frames_to_svg(frames_list: List[List], kayak_name: str,
     Raises:
         IOError: If output directory cannot be created or files cannot be written
         ValueError: If enforce_continuity is True and frame geometry is not continuous
+        
+    Note:
+        The bounding box is computed from the frame geometry extent and includes
+        a 20mm margin (FRAME_BOUNDS_MARGIN) on all sides to ensure proper clearance
+        for CNC fabrication and viewing.
     """
     # Create output directory
     output_path = Path(output_dir)
@@ -458,8 +536,8 @@ def export_frames_to_svg(frames_list: List[List], kayak_name: str,
                 else:
                     logger.warning(f"Frame {frame_idx} path is discontinuous: {e}")
             
-            #TODO: Better bounding box
-            bounds = {'x_min': -1000, 'x_max': 1000, 'y_min': 0, 'y_max': 1000}
+            # Calculate bounding box from frame geometry extent with margin
+            bounds = calculate_frame_bounds(frame_geometry)
             
             # Start building SVG
             svg_content = generate_svg_header(bounds)

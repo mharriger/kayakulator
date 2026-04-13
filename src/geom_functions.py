@@ -1,5 +1,7 @@
 import numpy as np
 import skspatial.objects as skso
+import math
+from geom_primitives import LineSegment
 
 YZplane = skso.Plane([0,0,0], normal=[1,0,0])
 XZplane = skso.Plane([0,0,0], normal=[0,1,0])
@@ -126,3 +128,32 @@ def segment_polyline_near_straight(points, max_dev=2.0):
         segments.append(pts[start:seg_end + 1])
         start = seg_end
     return segments
+
+def line_segment_midpoint(l: LineSegment):
+    d_x = (l.p2[0] - l.p1[0]) / 2.0
+    d_y = (l.p2[1] - l.p1[1]) / 2.0
+    return (l.p1[0] + d_x, l.p1[1] + d_y)
+
+def perpendicular_offset(l: LineSegment, p: tuple[float, float], distance: float, towards_center_line=True):
+    slope = (l.p2[1] - l.p1[1]) / (l.p2[0] - l.p1[0])
+    perp_slope = -1.0 / slope
+    r = math.hypot(1, perp_slope)
+    v = skso.Vector([1, perp_slope]).unit()  # Normalize the perpendicular vector
+    #d_x = distance / math.sqrt(1 + perp_slope**2)
+    #d_y = (distance * perp_slope) / math.sqrt(1 + perp_slope**2)
+    # Find the point that is higher than this one, and closer to the kayak center line
+    if towards_center_line:
+        return p[0] - distance / r, p[1] - (distance * perp_slope) / r
+    else:
+        return p[0] + distance / r, p[1] + (distance * perp_slope) / r
+
+def offset_point(pt: tuple[float, float], slope: float, distance: float):
+    d_x = distance / math.sqrt(1 + slope**2)
+    d_y = (distance * slope) / math.sqrt(1 + slope**2)
+    return pt[0] - abs(d_x), pt[1] + abs(d_y)
+
+def midpoint_perpendicular_offset(l: LineSegment, distance: float):
+    return perpendicular_offset(l, line_segment_midpoint(l), distance)
+
+def distance(p1: tuple[float, float], p2: tuple[float, float]):
+    return math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
