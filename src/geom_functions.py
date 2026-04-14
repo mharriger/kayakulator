@@ -27,13 +27,11 @@ def local_to_global(point: skso.Point, origin: skso.Point, u: skso.Vector, v: sk
 
 
 def make_coordinate_system(plane: skso.Plane) -> tuple[skso.Point, skso.Vector, skso.Vector]:
-    origin = plane.project_point(skso.Point([0.0, 0.0, 0.0]))
+    z = plane.intersect_line(skso.Line([0,0,0], [0,0,1]))[2]
+    origin = skso.Point([0.0, 0.0, z]) 
     n = np.asarray(plane.normal, dtype=float)
     n = n / np.linalg.norm(n)
-    ref = np.array([0.0, 0.0, 1.0], dtype=float)
-    if abs(np.dot(n, ref)) > 0.999:
-        ref = np.array([0.0, 1.0, 0.0], dtype=float)
-    u = np.cross(ref, n)
+    u = plane.intersect_plane(YZplane).direction
     u /= np.linalg.norm(u)
     v = np.cross(n, u)
     v /= np.linalg.norm(v)

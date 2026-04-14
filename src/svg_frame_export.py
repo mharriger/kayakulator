@@ -1,11 +1,12 @@
 """SVG export module for kayak frame geometry.
 
 This module provides functionality to export kayak frame geometry (represented as
-LineSegment and ArcThreePoints objects) to SVG files suitable for CNC fabrication
+LineSegment, ArcThreePoints, and Bspline objects) to SVG files suitable for CNC fabrication
 and design review.
 
 The module handles:
 - Conversion of geometric primitives to SVG path commands
+- B-spline to Bézier curve conversion for smooth curves
 - Output of frame geometry at original dimensions (no scaling applied)
 - Continuous SVG path generation with all frame elements in single path element
 - Dynamic bounding box calculation with 20mm margin for fabrication clearance
@@ -19,16 +20,24 @@ margin on all sides.
 
 Usage Example:
     from geom_primitives import LineSegment, ArcThreePoints
+    from Bspline import Bspline
     from svg_frame_export import export_frames_to_svg
     
-    # Create frame geometry
+    # Create frame geometry with curves and B-splines
     frame_1 = [
         LineSegment((0, 10), (20, 10)),
         ArcThreePoints((20, 10), (30, 15), (40, 10)),
+        Bspline(
+            control_points=((40, 10), (50, 20), (60, 10), (70, 0)),
+            multiplicities=(1, 1, 1, 1),
+            knots=(0, 1, 2, 3, 4),
+            degree=3
+        ),
     ]
     
     # Export to SVG files
     # The bounding box is automatically calculated with 20mm margin
+    # B-splines are converted to Bézier curves for SVG compatibility
     export_frames_to_svg(
         frames_list=[frame_1],
         kayak_name='SeaRoverST',
@@ -45,6 +54,8 @@ from typing import List, Dict, Tuple, Optional
 import logging
 
 from geom_primitives import LineSegment, ArcThreePoints
+from Bspline import Bspline
+from bspline_svg import bspline_to_svg_path, compute_bspline_bounds
 
 
 # Configure logging
@@ -59,11 +70,11 @@ def calculate_frame_bounds(frame_geometry: List) -> Dict[str, float]:
     """Calculate the bounding box of frame geometry with margin.
     
     Computes the minimal bounding box that encompasses all frame geometry
-    (LineSegment and ArcThreePoints objects) and applies a uniform margin
+    (LineSegment, ArcThreePoints, and Bspline objects) and applies a uniform margin
     on all sides.
     
     Args:
-        frame_geometry: List of LineSegment and ArcThreePoints objects
+        frame_geometry: List of LineSegment, ArcThreePoints, and Bspline objects
         
     Returns:
         Dictionary with keys: x_min, x_max, y_min, y_max representing
@@ -95,6 +106,18 @@ def calculate_frame_bounds(frame_geometry: List) -> Dict[str, float]:
             # Use all three points (conservative approach, doesn't account for arc bulge)
             x_coords.extend([geom.p1[0], geom.p2[0], geom.p3[0]])
             y_coords.extend([geom.p1[1], geom.p2[1], geom.p3[1]])
+        elif isinstance(geom, Bspline):
+            # Compute bounds for B-spline curve
+            try:
+                spline_bounds = compute_bspline_bounds(geom)
+                x_coords.extend([spline_bounds['x_min'], spline_bounds['x_max']])
+                y_coords.extend([spline_bounds['y_min'], spline_bounds['y_max']])
+            except Exception as e:
+                logger.warning(f"Failed to compute B-spline bounds: {e}")
+                # Fallback to control points
+                for cp in geom.control_points:
+                    x_coords.append(cp[0])
+                    y_coords.append(cp[1])
     
     # Find extent
     if not x_coords or not y_coords:
@@ -593,6 +616,42 @@ def export_frames_to_svg(frames_list: List[List], kayak_name: str,
                             # Fallback to line segments if collinear
                             continuous_path.line_to(geom.p2[0], geom.p2[1])
                             continuous_path.line_to(geom.p3[0], geom.p3[1])
+                    elif isinstance(geom, Bspline):
+                        # Convert B-spline to SVG Bézier path
+                        try:
+                            svg_path = bspline_to_svg_path(geom)
+                            if svg_path:
+                                # Parse the SVG path to extract control points
+                                # Format: "M x,y C x1,y1 x2,y2 x3,y3 C x1,y1 x2,y2 x3,y3 ..."
+                                if first:
+                                    # Extract start point from path
+                                    parts = svg_path.split()
+                                    if parts[0].startswith('M'):
+                                        start_coord = parts[0][1:].split(',')
+                                        continuous_path.move_to(float(start_coord[0]), float(start_coord[1]))
+                                        first = False
+                                
+                                # Add Bézier curves from the path
+                                parts = svg_path.split()
+                                i = 1  # Skip the M command
+                                while i < len(parts):
+                                    if parts[i].startswith('C'):
+                                        # Parse cubic Bézier: C x1,y1 x2,y2 x3,y3
+                                        ctrl1 = parts[i][1:].split(',')
+                                        ctrl2 = parts[i+1].split(',')
+                                        end = parts[i+2].split(',')
+                                        
+                                        continuous_path.commands.append(
+                                            f"C {float(ctrl1[0]):.2f} {float(ctrl1[1]):.2f} "
+                                            f"{float(ctrl2[0]):.2f} {float(ctrl2[1]):.2f} "
+                                            f"{float(end[0]):.2f} {float(end[1]):.2f}"
+                                        )
+                                        i += 3
+                                    else:
+                                        i += 1
+                        except Exception as e:
+                            logger.warning(f"Failed to convert B-spline at frame {frame_idx}: {e}")
+                            continue
                 except Exception as e:
                     logger.warning(f"Failed to convert geometry at frame {frame_idx}: {e}")
                     continue

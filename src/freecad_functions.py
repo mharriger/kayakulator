@@ -2,6 +2,8 @@
 import numpy as np
 
 import sys
+
+from geom_primitives import LineSegment, ArcThreePoints
 sys.path.append("/usr/lib/freecad-python3/lib")
 sys.path.append("/usr/share/freecad/Mod")
 import FreeCAD as App
@@ -27,6 +29,52 @@ def add_points_to_document(doc, name, points):
         part_point.Z = point.z
         part_points.append(part_point)
     return part_points
+
+def make_frame_sketch(doc, name, station: float):
+    sketch = doc.addObject('Sketcher::SketchObject', name)
+    sketch.Placement = App.Placement(App.Vector(0, station, 0), App.Rotation(App.Vector(1,0,0), 90))
+    return sketch
+
+def sketch_line_segment(sketch, line: LineSegment):
+    line_geo = Part.LineSegment(App.Vector(*line.p1), App.Vector(*line.p2))
+    line_n = sketch.addGeometry(line_geo)
+    # Add constraints to the sketch to fix the line endpoints
+    sketch.addConstraint(Sketcher.Constraint('DistanceX',-1,1,line_n,1,App.Units.Quantity(f"{line.p1[0]} mm")))
+    sketch.addConstraint(Sketcher.Constraint('DistanceY',-1,1,line_n,1,App.Units.Quantity(f"{line.p1[1]} mm")))
+    sketch.addConstraint(Sketcher.Constraint('DistanceX',-1,1,line_n,2,App.Units.Quantity(f"{line.p2[0]} mm")))
+    sketch.addConstraint(Sketcher.Constraint('DistanceY',-1,1,line_n,2,App.Units.Quantity(f"{line.p2[1]} mm")))
+    line_geo = Part.LineSegment(App.Vector(-line.p1[0], line.p1[1]), App.Vector(-line.p2[0], line.p2[1]))
+    line_n2 = sketch.addGeometry(line_geo)
+    if line.p1[0] == 0:
+        sketch.addConstraint(Sketcher.Constraint('Coincident', line_n, 1, line_n2, 1))
+    else:
+        sketch.addConstraint(Sketcher.Constraint('Symmetric',line_n,1,line_n2,1,-2))
+    if line.p2[0] == 0:
+        sketch.addConstraint(Sketcher.Constraint('Coincident', line_n, 2, line_n2, 2))
+    else:
+        sketch.addConstraint(Sketcher.Constraint('Symmetric',line_n,2,line_n2,2,-2))
+    return line_n
+
+def sketch_arc_three_points(sketch, arc: ArcThreePoints):
+    arc_geo = Part.Arc(App.Vector(*arc.p1), App.Vector(*arc.p2), App.Vector(*arc.p3))
+    arc_n = sketch.addGeometry(arc_geo)
+    # Add constraints to the sketch to fix the arc points
+    sketch.addConstraint(Sketcher.Constraint('Radius',arc_n,sketch.Geometry[arc_n].Radius))
+    sketch.addConstraint(Sketcher.Constraint('DistanceX',-1,1,arc_n,1,App.Units.Quantity(f"{arc.p3[0]} mm")))
+    sketch.addConstraint(Sketcher.Constraint('DistanceY',-1,1,arc_n,1,App.Units.Quantity(f"{arc.p3[1]} mm")))
+    sketch.addConstraint(Sketcher.Constraint('DistanceX',-1,1,arc_n,2,App.Units.Quantity(f"{arc.p1[0]} mm")))
+    sketch.addConstraint(Sketcher.Constraint('DistanceY',-1,1,arc_n,2,App.Units.Quantity(f"{arc.p1[1]} mm")))
+
+    #Make mirror image of the arc
+    arc_geo = Part.Arc(App.Vector(-arc.p1[0], arc.p1[1]), App.Vector(-arc.p2[0], arc.p2[1]), App.Vector(-arc.p3[0], arc.p3[1]))
+    arc_n = sketch.addGeometry(arc_geo)
+    sketch.addConstraint(Sketcher.Constraint('Radius',arc_n,sketch.Geometry[arc_n].Radius))
+    sketch.addConstraint(Sketcher.Constraint('DistanceX',-1,1,arc_n,1,App.Units.Quantity(f"-{arc.p1[0]} mm")))
+    sketch.addConstraint(Sketcher.Constraint('DistanceY',-1,1,arc_n,1,App.Units.Quantity(f"{arc.p1[1]} mm")))
+    sketch.addConstraint(Sketcher.Constraint('DistanceX',-1,1,arc_n,2,App.Units.Quantity(f"-{arc.p3[0]} mm")))
+    sketch.addConstraint(Sketcher.Constraint('DistanceY',-1,1,arc_n,2,App.Units.Quantity(f"{arc.p3[1]} mm")))
+    
+    return arc_n
 
 def add_bspline_sketch(doc, name, sketch_local_coords, bspline: Bspline, chine_points_2d, rotation=None):
 

@@ -7,6 +7,7 @@ from freecad_functions import (makeFreeCADDocument, add_bspline_sketch, add_poin
 
 from geom_functions import planarize_and_extrapolate_chine, local_to_global, global_to_local
 from draw_frame import draw_frame
+from draw_frame_sketch import draw_frame_sketch
 from svg_frame_export import export_frames_to_svg
 
 
@@ -117,9 +118,6 @@ add_points_to_document(doc, 'Gunwale', geom_dict['Gunwale']['3d_points'])
 
 add_bspline_sketch(doc, 'Keel', [skso.Point([0,0,0])], geom_dict['Keel']['bspline'], geom_dict['Keel']['2d_points'], rotation=(0,1,0,270))
 
-doc.recompute()
-doc.saveAs(f'{KAYAK_NAME}_bsplines.FCStd')
-
 #TODO: Frame Drawing
 frame_lines = []
 
@@ -147,6 +145,30 @@ for station_idx in range(len(stations)):
         12.7,   # deckridge_width
         0.1  # relief_arc_percentage
     ))
+    draw_frame_sketch(
+        doc, # FreeCAD Document
+        stations[station_idx],  # station
+        geom_dict['Keel']['2d_points'][station_idx][1],  # keel_y
+        12.7,  # keel_width
+        25.4, #keel_depth
+        [
+            skso.Point([
+                geom_dict[f'Chine{i+1}']['3d_points'][station_idx + 1][0],
+                geom_dict[f'Chine{i+1}']['3d_points'][station_idx + 1][2]
+            ]) for i in range(len(chines))
+        ],
+        [geom_dict[f'Chine{i+1}']['plane_normal'][0] for i in range(len(chines))],
+        25.4,  # chine_depth
+        12.7,   # chine_width
+        skso.Point([geom_dict['Gunwale']['3d_points'][station_idx + 1][0], geom_dict['Gunwale']['3d_points'][station_idx + 1][2]]), # gunwale_pt
+        geom_dict['Gunwale']['plane_normal'][0], # gunwale_slope
+        25.4, # gunwale_depth
+        12.7,   # gunwale_width
+        skso.Point([geom_dict['Deckridge']['3d_points'][station_idx][0], geom_dict['Deckridge']['3d_points'][station_idx][2]]), # deckridge
+        25.4, # deckridge_depth
+        12.7,   # deckridge_width
+        0.1  # relief_arc_percentage
+    )
 
 # Export frames to SVG files for CNC cutting
 export_frames_to_svg(
@@ -159,3 +181,6 @@ export_frames_to_svg(
     include_metadata=True,
     enforce_continuity=False  # Current geometry is not continuous, set to True when fixed
 )
+
+doc.recompute()
+doc.saveAs(f'{KAYAK_NAME}_bsplines.FCStd')
