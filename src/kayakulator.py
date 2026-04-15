@@ -3,9 +3,10 @@ import skspatial.objects as skso
 from minimum_energy_bspline import minimum_energy_bspline
 import numpy as np
 
-from freecad_functions import (makeFreeCADDocument, add_bspline_sketch, add_points_to_document)
+from freecad_functions import (makeFreeCADDocument, add_bspline_sketch, add_points_to_document, sketch_line_segment)
+from geom_primitives import LineSegment
 
-from geom_functions import planarize_and_extrapolate_chine, local_to_global, global_to_local
+from geom_functions import planarize_and_extrapolate_chine, global_to_local
 from draw_frame import draw_frame
 from draw_frame_sketch import draw_frame_sketch
 from svg_frame_export import export_frames_to_svg
@@ -88,11 +89,19 @@ geom_dict['Gunwale'] = {
     'distances': gunwale_distances
 }
 
+keel_3d = [skso.Point([0, stations[i], keelZ[i]]) for i in range(len(stations))]
+keel_2d = [[stations[i], keelZ[i]] for i in range(len(stations))]
+keel_3d.insert(0, geom_dict['Chine1']['3d_points'][0].copy())
+keel_3d.append(geom_dict['Chine1']['3d_points'][-1].copy())
+pt = geom_dict['Chine1']['3d_points'][0].copy()
+keel_2d.insert(0, ([pt[1], pt[2]]))
+pt = geom_dict['Chine1']['3d_points'][-1].copy()
+keel_2d.append(([pt[1], pt[2]]))
 
 geom_dict['Keel'] = {
-    '3d_points': [skso.Point([0, stations[i], keelZ[i]]) for i in range(len(stations))],
-    '2d_points': [[0, keelZ[i]] for i in range(len(stations))],
-    'bspline': minimum_energy_bspline([[0, keelZ[i]] for i in range(len(stations))]),
+    '3d_points': keel_3d,
+    '2d_points': keel_2d,
+    'bspline': minimum_energy_bspline(keel_2d),
     'plane_normal': np.array([1,0,0]),
     'plane_point': skso.Point([0,0,0]),
     'distances': [0 for _ in range(len(stations))]
@@ -116,15 +125,18 @@ for idx, chine_bspline in enumerate(chine_bsplines):
 add_bspline_sketch(doc, 'Gunwale', gunwale_coords, gunwale_bspline, geom_dict['Gunwale']['2d_points'])
 add_points_to_document(doc, 'Gunwale', geom_dict['Gunwale']['3d_points'])
 
-add_bspline_sketch(doc, 'Keel', [skso.Point([0,0,0])], geom_dict['Keel']['bspline'], geom_dict['Keel']['2d_points'], rotation=(0,1,0,270))
+sketch = add_bspline_sketch(doc, 'Keel', [skso.Point([0,0,0])], geom_dict['Keel']['bspline'], geom_dict['Keel']['2d_points'], rotation=(0.58,0.58,0.58,120))
+pt = geom_dict['Gunwale']['3d_points'][0]
+sketch_line_segment(sketch, LineSegment(geom_dict['Keel']['2d_points'][0], skso.Point((pt[1], pt[2]))), mirror=False)
+pt = geom_dict['Gunwale']['3d_points'][-1]
+sketch_line_segment(sketch, LineSegment(geom_dict['Keel']['2d_points'][-1], skso.Point((pt[1], pt[2]))), mirror=False)
 
-#TODO: Frame Drawing
 frame_lines = []
 
 for station_idx in range(len(stations)):
 
     frame_lines.append(draw_frame(
-        geom_dict['Keel']['2d_points'][station_idx][1],  # keel_y
+        geom_dict['Keel']['2d_points'][station_idx + 1][1],  # keel_y
         12.7,  # keel_width
         25.4, #keel_depth
         [
@@ -148,7 +160,7 @@ for station_idx in range(len(stations)):
     draw_frame_sketch(
         doc, # FreeCAD Document
         stations[station_idx],  # station
-        geom_dict['Keel']['2d_points'][station_idx][1],  # keel_y
+        geom_dict['Keel']['2d_points'][station_idx + 1][1],  # keel_y
         12.7,  # keel_width
         25.4, #keel_depth
         [

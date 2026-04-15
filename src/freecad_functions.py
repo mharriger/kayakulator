@@ -35,7 +35,7 @@ def make_frame_sketch(doc, name, station: float):
     sketch.Placement = App.Placement(App.Vector(0, station, 0), App.Rotation(App.Vector(1,0,0), 90))
     return sketch
 
-def sketch_line_segment(sketch, line: LineSegment):
+def sketch_line_segment(sketch, line: LineSegment, mirror=True):
     line_geo = Part.LineSegment(App.Vector(*line.p1), App.Vector(*line.p2))
     line_n = sketch.addGeometry(line_geo)
     # Add constraints to the sketch to fix the line endpoints
@@ -43,16 +43,17 @@ def sketch_line_segment(sketch, line: LineSegment):
     sketch.addConstraint(Sketcher.Constraint('DistanceY',-1,1,line_n,1,App.Units.Quantity(f"{line.p1[1]} mm")))
     sketch.addConstraint(Sketcher.Constraint('DistanceX',-1,1,line_n,2,App.Units.Quantity(f"{line.p2[0]} mm")))
     sketch.addConstraint(Sketcher.Constraint('DistanceY',-1,1,line_n,2,App.Units.Quantity(f"{line.p2[1]} mm")))
-    line_geo = Part.LineSegment(App.Vector(-line.p1[0], line.p1[1]), App.Vector(-line.p2[0], line.p2[1]))
-    line_n2 = sketch.addGeometry(line_geo)
-    if line.p1[0] == 0:
-        sketch.addConstraint(Sketcher.Constraint('Coincident', line_n, 1, line_n2, 1))
-    else:
-        sketch.addConstraint(Sketcher.Constraint('Symmetric',line_n,1,line_n2,1,-2))
-    if line.p2[0] == 0:
-        sketch.addConstraint(Sketcher.Constraint('Coincident', line_n, 2, line_n2, 2))
-    else:
-        sketch.addConstraint(Sketcher.Constraint('Symmetric',line_n,2,line_n2,2,-2))
+    if mirror:
+        line_geo = Part.LineSegment(App.Vector(-line.p1[0], line.p1[1]), App.Vector(-line.p2[0], line.p2[1]))
+        line_n2 = sketch.addGeometry(line_geo)
+        if line.p1[0] == 0:
+            sketch.addConstraint(Sketcher.Constraint('Coincident', line_n, 1, line_n2, 1))
+        else:
+            sketch.addConstraint(Sketcher.Constraint('Symmetric',line_n,1,line_n2,1,-2))
+        if line.p2[0] == 0:
+            sketch.addConstraint(Sketcher.Constraint('Coincident', line_n, 2, line_n2, 2))
+        else:
+            sketch.addConstraint(Sketcher.Constraint('Symmetric',line_n,2,line_n2,2,-2))
     return line_n
 
 def sketch_arc_three_points(sketch, arc: ArcThreePoints):
