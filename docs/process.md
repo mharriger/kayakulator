@@ -46,10 +46,11 @@ Steps performed independently for each chine and for the gunwale:
    - endpoints in 3D
 
 ### 2.2 Keel
-1. Fit a circular arc to the raw keel points.
+1. Fit a minimum-energy b-spline arc to the raw keel points.
 2. Identify the plane of the chine with the lowest Z-values.
 3. Intersect the keel arc with that chine plane to obtain extended bow and stern endpoints.
 4. Build a minimum-energy B-spline using the original + extended endpoints.
+5. Extend a straight line segment from the extended keel endpoints to the bow and stern points defined by the intersection of the gunwale curve with the YZ plane.
 
 ### 2.3 Deckridge
 1. Identify two approximately linear point sequences starting at bow and stern.
