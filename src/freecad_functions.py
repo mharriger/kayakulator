@@ -138,6 +138,14 @@ def add_rectangle_sketch(doc, name, width, height):
     sketch.addConstraint(Sketcher.Constraint('Horizontal', 0))
     return sketch
 
+def add_sweep(doc, name, profile_sketch, path_sketch):
+    doc.addObject('Part::Sweep', name)
+    doc.ActiveObject.Sections=[doc.getObject(profile_sketch), ]
+    doc.ActiveObject.Spine=(doc.getObject(path_sketch),['Edge1',])
+    doc.ActiveObject.Solid=False
+    doc.ActiveObject.Frenet=True
+    doc.ActiveObject.Solid = True
+
 def placement_from_directions(origin, u, v) -> App.Placement:
     """
     origin: Vector - 3D origin of the local frame
