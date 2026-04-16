@@ -3,7 +3,7 @@ import skspatial.objects as skso
 from minimum_energy_bspline import minimum_energy_bspline
 import numpy as np
 
-from freecad_functions import (makeFreeCADDocument, add_bspline_sketch, add_points_to_document, sketch_line_segment)
+from freecad_functions import (add_rectangle_sketch, makeFreeCADDocument, add_bspline_sketch, add_points_to_document, sketch_line_segment)
 from geom_primitives import LineSegment
 
 from geom_functions import planarize_and_extrapolate_chine, global_to_local
@@ -12,12 +12,14 @@ from draw_frame_sketch import draw_frame_sketch
 from svg_frame_export import export_frames_to_svg
 
 
-
-
-#TODO: Better b-spline representation (knot vector, multiplicities, control points)
-
 KAYAK_NAME = 'SeaRoverST'
 
+keel_width = 12.7
+keel_depth = 25.4
+chine_width = 12.7
+chine_depth = 25.4
+gunwale_width = 12.7
+gunwale_depth = 25.4
 
 data = load_stations_file(f'data/{KAYAK_NAME}.offsets')
 stations = data['stations']
@@ -130,6 +132,10 @@ pt = geom_dict['Gunwale']['3d_points'][0]
 sketch_line_segment(sketch, LineSegment(geom_dict['Keel']['2d_points'][0], skso.Point((pt[1], pt[2]))), mirror=False)
 pt = geom_dict['Gunwale']['3d_points'][-1]
 sketch_line_segment(sketch, LineSegment(geom_dict['Keel']['2d_points'][-1], skso.Point((pt[1], pt[2]))), mirror=False)
+
+sk = add_rectangle_sketch(doc, 'gunwale_shape', gunwale_depth, gunwale_width)
+sk.AttachmentSupport = [(doc.getObject('Gunwale'),u'Edge1'),(doc.getObject('Keel'),u'Vertex2'),]
+sk.MapMode = 'FrenetNB'
 
 frame_lines = []
 

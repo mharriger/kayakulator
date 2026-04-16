@@ -114,6 +114,30 @@ def add_bspline_sketch(doc, name, sketch_local_coords, bspline: Bspline, chine_p
     sketch.addConstraint(Sketcher.Constraint('Coincident', id - 1, 3, 0, 2))  # Last control point
     return sketch
 
+def add_rectangle_sketch(doc, name, width, height):
+    sketch = doc.addObject('Sketcher::SketchObject', name)
+    sketch.Placement = App.Placement(App.Vector(0,0,0), App.Rotation(App.Vector(0,0,1), 0))
+    p1 = App.Vector(0, 0, 0)
+    p2 = App.Vector(0, width)
+    p3 = App.Vector(width, height, 0)
+    p4 = App.Vector(width, 0, 0)
+    lines = [Part.LineSegment(p1, p2), Part.LineSegment(p2, p3), Part.LineSegment(p3, p4), Part.LineSegment(p4, p1)]
+    for line in lines:
+        sketch.addGeometry(line)
+    sketch.addConstraint(Sketcher.Constraint('Coincident', 0, 2, 1, 1))
+    sketch.addConstraint(Sketcher.Constraint('Coincident', 1, 2, 2, 1))
+    sketch.addConstraint(Sketcher.Constraint('Coincident', 2, 2, 3, 1))
+    sketch.addConstraint(Sketcher.Constraint('Coincident', 3, 2, 0, 1))
+    sketch.addConstraint(Sketcher.Constraint('Parallel', 0, 2))
+    sketch.addConstraint(Sketcher.Constraint('Parallel', 1, 3))
+    sketch.addConstraint(Sketcher.Constraint('Perpendicular', 0, 1))
+    sketch.addConstraint(Sketcher.Constraint('Distance', 0, width))
+    sketch.addConstraint(Sketcher.Constraint('Distance', 1, height))
+    sketch.recompute()
+    sketch.addConstraint(Sketcher.Constraint('Coincident', -1,1,0,2))
+    sketch.addConstraint(Sketcher.Constraint('Horizontal', 0))
+    return sketch
+
 def placement_from_directions(origin, u, v) -> App.Placement:
     """
     origin: Vector - 3D origin of the local frame
