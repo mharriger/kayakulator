@@ -12,5 +12,6 @@ from bspline_svg import bspline_to_svg_path
 
 def draw_stringer(stringer_bspline: Bspline, striner_width: float, stations: List[float]):
     lines = []
-    for station in stations: 
+    for station in stations:
+        pass
     return lines
