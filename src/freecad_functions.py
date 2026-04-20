@@ -117,25 +117,25 @@ def add_bspline_sketch(doc, name, sketch_local_coords, bspline: Bspline, chine_p
 def add_rectangle_sketch(doc, name, width, height):
     sketch = doc.addObject('Sketcher::SketchObject', name)
     sketch.Placement = App.Placement(App.Vector(0,0,0), App.Rotation(App.Vector(0,0,1), 0))
-    p1 = App.Vector(0, 0, 0)
-    p2 = App.Vector(0, width)
-    p3 = App.Vector(width, height, 0)
-    p4 = App.Vector(width, 0, 0)
+    p1 = App.Vector(0, 0)
+    p2 = App.Vector(0, height)
+    p3 = App.Vector(width, height)
+    p4 = App.Vector(width, 0)
     lines = [Part.LineSegment(p1, p2), Part.LineSegment(p2, p3), Part.LineSegment(p3, p4), Part.LineSegment(p4, p1)]
     for line in lines:
         sketch.addGeometry(line)
+
     sketch.addConstraint(Sketcher.Constraint('Coincident', 0, 2, 1, 1))
     sketch.addConstraint(Sketcher.Constraint('Coincident', 1, 2, 2, 1))
     sketch.addConstraint(Sketcher.Constraint('Coincident', 2, 2, 3, 1))
     sketch.addConstraint(Sketcher.Constraint('Coincident', 3, 2, 0, 1))
+    sketch.addConstraint(Sketcher.Constraint('Distance', 2, abs(height)))
+    sketch.addConstraint(Sketcher.Constraint('Distance', 3, abs(width)))
     sketch.addConstraint(Sketcher.Constraint('Parallel', 0, 2))
     sketch.addConstraint(Sketcher.Constraint('Parallel', 1, 3))
     sketch.addConstraint(Sketcher.Constraint('Perpendicular', 0, 1))
-    sketch.addConstraint(Sketcher.Constraint('Distance', 0, width))
-    sketch.addConstraint(Sketcher.Constraint('Distance', 1, height))
-    sketch.recompute()
-    sketch.addConstraint(Sketcher.Constraint('Coincident', -1,1,0,2))
-    sketch.addConstraint(Sketcher.Constraint('Horizontal', 0))
+    sketch.addConstraint(Sketcher.Constraint('Coincident', -1,1,3,2))
+    sketch.addConstraint(Sketcher.Constraint('Horizontal', 1))
     return sketch
 
 def add_sweep(doc, name, profile_sketch, path_sketch):

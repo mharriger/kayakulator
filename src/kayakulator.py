@@ -124,7 +124,7 @@ for idx, chine_bspline in enumerate(chine_bsplines):
     chine_coords = plane_coords[idx]
     add_bspline_sketch(doc, f'Chine{idx+1}', chine_coords, chine_bspline, geom_dict[f'Chine{idx+1}']['2d_points'])
     add_points_to_document(doc, f'Chine{idx+1}', geom_dict[f'Chine{idx+1}']['3d_points'])
-    sk = add_rectangle_sketch(doc, f'Chine{idx+1}_shape', chine_depth, chine_width)
+    sk = add_rectangle_sketch(doc, f'Chine{idx+1}_shape', -chine_depth, chine_width)
     sk.AttachmentSupport = [(doc.getObject(f'Chine{idx+1}'),u'Edge1'),(doc.getObject(f'Chine{idx+1}'),u'Vertex1'),]
     sk.MapMode = 'FrenetNB'
     add_sweep(doc, f'Chine{idx+1}_sweep', f'Chine{idx+1}_shape', f'Chine{idx+1}')
@@ -138,7 +138,8 @@ sketch_line_segment(sketch, LineSegment(geom_dict['Keel']['2d_points'][0], skso.
 pt = geom_dict['Gunwale']['3d_points'][-1]
 sketch_line_segment(sketch, LineSegment(geom_dict['Keel']['2d_points'][-1], skso.Point((pt[1], pt[2]))), mirror=False)
 
-sk = add_rectangle_sketch(doc, 'gunwale_shape', gunwale_depth, gunwale_width)
+sk = add_rectangle_sketch(doc, 'gunwale_shape', -gunwale_depth, -gunwale_width)
+doc.recompute()
 sk.AttachmentSupport = [(doc.getObject('Gunwale'),u'Edge1'),(doc.getObject('Keel'),u'Vertex2'),]
 sk.MapMode = 'FrenetNB'
 add_sweep(doc, f'Gunwale_sweep', f'gunwale_shape', f'Gunwale')
