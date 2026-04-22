@@ -4,6 +4,9 @@ output/frames/*.svg
 # FreeCAD temporary files
 *.FCBak
 
+#FreeCAD output files
+*.FCStd
+
 # Python
 __pycache__/
 *.py[cod]

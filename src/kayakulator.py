@@ -1,6 +1,7 @@
-from build123d import offset
-
 from offset_table import OffsetTable, KEEL, GUNWALE, DECKRIDGE, chine, Member, Offset
+
+from OCC.Core.gp import gp_Pnt
+from OCC.Core.TColgp import TColgp_Array1OfPnt
 
 from stations_loader import load_stations_file
 import skspatial.objects as skso
@@ -53,7 +54,10 @@ plane_coords = []
 geom_dict = {}
 
 def process_chine(chine: list[Offset]):
-    points = skso.Points([[chine[i].x, offsets.station_locations[i], chine[i].z] for i in range(offsets.station_count)])
+    points = [gp_Pnt(chine[i].x, offsets.station_locations[i], chine[i].z) for i in range(offsets.station_count)]
+    occ_points = TColgp_Array1OfPnt(1, len(points))
+    for i, point in enumerate(points, 1):
+        occ_points.SetValue(i, point)
 
     # Make the chine points coplanar, and approximate the bow and stern endpoints
     threedpoints, twodpoints, chine_plane, local_coords, distances = planarize_and_extrapolate_chine(points)
