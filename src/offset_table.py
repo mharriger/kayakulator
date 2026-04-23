@@ -1,35 +1,11 @@
 """
 
-Store and access a table of offsets for a kayak.
+Data object for a table of offsets for a kayak.
 
 """
 
 from dataclasses import dataclass
-from enum import Enum
-
-
-class MemberType(Enum):
-    KEEL = "keel"
-    CHINE = "chine"
-    GUNWALE = "gunwale"
-    DECKRIDGE = "deckridge"
-
-
-@dataclass(frozen=True)
-class Member:
-    type: MemberType
-    index: int | None = None
-
-    def __post_init__(self):
-        if self.type == MemberType.CHINE and self.index is None:
-            raise ValueError("Chine must have an index")
-        if self.type != MemberType.CHINE and self.index is not None:
-            raise ValueError("Only chine can have an index")
-
-    def __repr__(self):
-        if self.type == MemberType.CHINE:
-            return f"{self.type.value}{self.index}"
-        return self.type.value
+from member import Member, MemberType, chine, KEEL, GUNWALE, DECKRIDGE
 
 @dataclass
 class Offset:
@@ -115,16 +91,6 @@ class OffsetTable:
     @property
     def chine_count(self):
         return len([m for m in self._members if m.type == MemberType.CHINE])
-
-# Convenience constructors
-def chine(i: int) -> Member:
-    return Member(MemberType.CHINE, i)
-
-
-KEEL = Member(MemberType.KEEL)
-GUNWALE = Member(MemberType.GUNWALE)
-DECKRIDGE = Member(MemberType.DECKRIDGE)
-
 
 # Example usage
 if __name__ == "__main__":
