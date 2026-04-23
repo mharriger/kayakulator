@@ -1,3 +1,7 @@
+from build123d import offset
+
+from offset_table import OffsetTable, KEEL, GUNWALE, DECKRIDGE, chine, Member, Offset
+
 from stations_loader import load_stations_file
 import skspatial.objects as skso
 from minimum_energy_bspline import minimum_energy_bspline
@@ -21,24 +25,25 @@ chine_depth = 25.4
 gunwale_width = 12.7
 gunwale_depth = 25.4
 
-data = load_stations_file(f'data/{KAYAK_NAME}.offsets')
-stations = data['stations']
-keelZ = data['keel_hab']
-chines = data['chines']
-if len(chines) == 0:
-    chinesX = np.empty((0, len(stations)))
-    chinesZ = np.empty((0, len(stations)))
-else:
-    chinesX = np.vstack([c['hb'] for c in chines])
-    chinesZ = np.vstack([c['hab'] for c in chines])
-deckridgeZ = data['deckridge']['hab']
-gunwaleX = data['gunwale']['hb']
-gunwaleZ = data['gunwale']['hab']
+offsets = OffsetTable()
 
-if chinesX.ndim == 1:
-    chinesX.shape = (1, len(chinesX))
-if chinesZ.ndim == 1:
-    chinesZ.shape = (1, len(chinesZ))
+data = load_stations_file(f'data/{KAYAK_NAME}.offsets')
+offsets.station_locations = {idx: station for idx, station in enumerate(data['stations'])}
+
+for idx, z in enumerate(data['keel_hab']):
+    offsets.set_offset(station_idx=idx, member=KEEL, x=0, z=z)
+
+for idx, chine_data in enumerate(data['chines']):
+    for station_idx, (x, z) in enumerate(zip(chine_data['hb'], chine_data['hab'])):
+        offsets.set_offset(station_idx=station_idx, member=chine(idx), x=x, z=z)
+
+for station_idx, z in enumerate(data['deckridge']['hab']):
+    offsets.set_offset(station_idx=station_idx, member=DECKRIDGE, x=0, z=z)
+
+for station_idx, (x,z) in enumerate(zip(data['gunwale']['hb'], data['gunwale']['hab'])):
+    offsets.set_offset(station_idx=station_idx, member=GUNWALE, x=x, z=z)
+
+# Get data from offsets table for processing
 
 chine_bsplines = []
 chine_planes = []
@@ -47,16 +52,16 @@ plane_coords = []
 
 geom_dict = {}
 
-def process_chine(chineX, chineZ):
-    points = skso.Points([[chineX[i], stations[i], chineZ[i]] for i in range(len(stations))])
+def process_chine(chine: list[Offset]):
+    points = skso.Points([[chine[i].x, offsets.station_locations[i], chine[i].z] for i in range(offsets.station_count)])
 
     # Make the chine points coplanar, and approximate the bow and stern endpoints
     threedpoints, twodpoints, chine_plane, local_coords, distances = planarize_and_extrapolate_chine(points)
 
-    for station_idx in range(len(stations)):
-        station_plane = skso.Plane(skso.Point([0, stations[station_idx], 0]), np.array([0,1,0]))
+    for station_idx in range(offsets.station_count):
+        station_plane = skso.Plane(skso.Point([0, offsets.station_locations[station_idx], 0]), np.array([0,1,0]))
         pt = station_plane.project_point(threedpoints[station_idx + 1])
-        threedpoints[station_idx + 1] = skso.Point([pt[0], stations[station_idx], pt[2]])
+        threedpoints[station_idx + 1] = skso.Point([pt[0], offsets.station_locations[station_idx], pt[2]])
         twodpoints[station_idx + 1] = global_to_local(pt, *local_coords)
 
     #TODO: Check that point distances are acceptable
@@ -64,11 +69,9 @@ def process_chine(chineX, chineZ):
 
     return threedpoints, twodpoints, chine_bspline, chine_plane, local_coords, distances
 
-for idx in range(len(chinesX)):
-    chineX = chinesX[idx]
-    chineZ = chinesZ[idx]
+for idx in range(offsets.chine_count):
 
-    chine_points_3d, chine_points_2d, chine_bspline, chine_plane, local_coords, distances = process_chine(chineX, chineZ)
+    chine_points_3d, chine_points_2d, chine_bspline, chine_plane, local_coords, distances = process_chine(offsets.get_member(chine(idx)))
     chine_bsplines.append(chine_bspline)
     chine_planes.append(chine_plane)
     plane_coords.append(local_coords)
@@ -81,7 +84,7 @@ for idx in range(len(chinesX)):
         'distances': distances
     }
 
-gunwale_points_3d, gunwale_points_2d, gunwale_bspline, gunwale_plane, gunwale_coords, gunwale_distances = process_chine(gunwaleX, gunwaleZ)
+gunwale_points_3d, gunwale_points_2d, gunwale_bspline, gunwale_plane, gunwale_coords, gunwale_distances = process_chine(offsets.get_member(GUNWALE))
 geom_dict['Gunwale'] = {
     '3d_points': gunwale_points_3d,
     '2d_points': gunwale_points_2d,
@@ -91,8 +94,8 @@ geom_dict['Gunwale'] = {
     'distances': gunwale_distances
 }
 
-keel_3d = [skso.Point([0, stations[i], keelZ[i]]) for i in range(len(stations))]
-keel_2d = [[stations[i], keelZ[i]] for i in range(len(stations))]
+keel_3d = [skso.Point([0, offsets.station_locations[i], offsets.get_offset(i, KEEL).z]) for i in range(offsets.station_count)]
+keel_2d = [[offsets.station_locations[i], offsets.get_offset(i, KEEL).z] for i in range(offsets.station_count)]
 keel_3d.insert(0, geom_dict['Chine1']['3d_points'][0].copy())
 keel_3d.append(geom_dict['Chine1']['3d_points'][-1].copy())
 pt = geom_dict['Chine1']['3d_points'][0].copy()
@@ -106,15 +109,15 @@ geom_dict['Keel'] = {
     'bspline': minimum_energy_bspline(keel_2d),
     'plane_normal': np.array([1,0,0]),
     'plane_point': skso.Point([0,0,0]),
-    'distances': [0 for _ in range(len(stations))]
+    'distances': [0 for _ in range(offsets.station_count)]
 }
 
 geom_dict['Deckridge'] = {
-    '3d_points': [skso.Point([0, stations[i], deckridgeZ[i]]) for i in range(len(stations))],
-    '2d_points': [[0, deckridgeZ[i]] for i in range(len(stations))],
+    '3d_points': [skso.Point([0, offsets.station_locations[i], offset.z]) for i, offset in sorted(offsets.get_member(DECKRIDGE).items(), key = lambda x: x[0])],
+    '2d_points': [[0, offset.z] for _, offset in sorted(offsets.get_member(DECKRIDGE).items(), key = lambda x: x[0])],
     'plane_normal': np.array([1,0,0]),
     'plane_point': skso.Point([0,0,0]),
-    'distances': [0 for _ in range(len(stations))]
+    'distances': [0 for _ in range(offsets.station_count)]
 }
 
 doc = makeFreeCADDocument(KAYAK_NAME)
@@ -146,7 +149,7 @@ add_sweep(doc, f'Gunwale_sweep', f'gunwale_shape', f'Gunwale')
 
 frame_lines = []
 
-for station_idx in range(len(stations)):
+for station_idx in range(offsets.station_count):
 
     frame_lines.append(draw_frame(
         geom_dict['Keel']['2d_points'][station_idx + 1][1],  # keel_y
@@ -156,9 +159,9 @@ for station_idx in range(len(stations)):
             skso.Point([
                 geom_dict[f'Chine{i+1}']['3d_points'][station_idx + 1][0],
                 geom_dict[f'Chine{i+1}']['3d_points'][station_idx + 1][2]
-            ]) for i in range(len(chines))
+            ]) for i in range(offsets.chine_count)
         ],
-        [geom_dict[f'Chine{i+1}']['plane_normal'][0] for i in range(len(chines))],
+        [geom_dict[f'Chine{i+1}']['plane_normal'][0] for i in range(offsets.chine_count)],
         25.4,  # chine_depth
         12.7,   # chine_width
         skso.Point([geom_dict['Gunwale']['3d_points'][station_idx + 1][0], geom_dict['Gunwale']['3d_points'][station_idx + 1][2]]), # gunwale_pt
@@ -172,7 +175,7 @@ for station_idx in range(len(stations)):
     ))
     draw_frame_sketch(
         doc, # FreeCAD Document
-        stations[station_idx],  # station
+        offsets.station_locations[station_idx],  # station
         geom_dict['Keel']['2d_points'][station_idx + 1][1],  # keel_y
         12.7,  # keel_width
         25.4, #keel_depth
@@ -180,9 +183,9 @@ for station_idx in range(len(stations)):
             skso.Point([
                 geom_dict[f'Chine{i+1}']['3d_points'][station_idx + 1][0],
                 geom_dict[f'Chine{i+1}']['3d_points'][station_idx + 1][2]
-            ]) for i in range(len(chines))
+            ]) for i in range(offsets.chine_count)
         ],
-        [geom_dict[f'Chine{i+1}']['plane_normal'][0] for i in range(len(chines))],
+        [geom_dict[f'Chine{i+1}']['plane_normal'][0] for i in range(offsets.chine_count)],
         25.4,  # chine_depth
         12.7,   # chine_width
         skso.Point([geom_dict['Gunwale']['3d_points'][station_idx + 1][0], geom_dict['Gunwale']['3d_points'][station_idx + 1][2]]), # gunwale_pt
