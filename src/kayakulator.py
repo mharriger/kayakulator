@@ -1,6 +1,6 @@
 from offset_table import OffsetTable, KEEL, GUNWALE, DECKRIDGE, chine, Member, Offset
 
-from OCC.Core.gp import gp_Pnt, gp_Pln, gp_Dir
+from OCC.Core.gp import gp_Pnt, gp_Pln, gp_Dir, gp_Pnt2d
 from OCC.Core.TColgp import TColgp_Array1OfPnt
 from OCC.Core.GProp import GProp_PEquation
 from OCC.Core.Geom2d import Geom2d_BSplineCurve
@@ -83,46 +83,66 @@ def get_chine_plane(chine: list[float, float, float]) -> gp_Pln:
     #TODO: Check that point distances are acceptable
     return plane
 
-def approximate_chine_endpoints(chine: list[float, float, float], plane: gp_Pln) -> tuple[gp_Pnt, gp_Pnt]:
-    """
-    Approximate the bow and stern endpoints of the chine by:
-    1. Projecting the chine points onto the plane
-    2. Fitting a circle to the projected points in 2D plane coordinates
-    3. Finding the intersection of the circle with the YZ plane (keel plane) to get the endpoints in 2D
-    4. Converting the 2D endpoints back to 3D points in global space
-    """
+def project_points_to_plane(points, plane):
+    """Project iterable of 3D points onto the given plane and return list of 2D points in plane coordinates."""
     pts_2d = []
     plane = Geom_Plane(plane)
-    for chine_pt in chine:
+    for chine_pt in points:
         projector = GeomAPI_ProjectPointOnSurf(gp_Pnt(*chine_pt), plane)
         if not projector.IsDone():
             raise ValueError("Projection of chine points onto plane failed.")
         np = projector.NearestPoint()
         x, y = projector.Parameters(1)
-        pt = skso.Point((x,y))
+        pt = gp_Pnt2d(x, y)
         # Store or use the projected point as needed
         pts_2d.append(pt)
         # This is how to convert back to 3D if needed:
         # pt_3d = gp_Pnt()
         # plane.D0(x, y, pt_3d)
-    circle = skso.Circle.best_fit(pts_2d)
+    return pts_2d
+
+def approximate_chine_endpoints(points, plane) -> tuple[gp_Pnt, gp_Pnt]:
+    """
+    Approximate the bow and stern endpoints of the chine by:
+    1. Fitting a circle to the projected points in 2D plane coordinates
+    2. Finding the intersection of the circle with the YZ plane (keel plane) to get the endpoints in 2D
+    3. Converting the 2D endpoints back to 3D points in global space
+    """
+    plane = Geom_Plane(plane)
+    sk_plane = skso.Plane(plane.Location().Coord(), plane.Axis().Direction().Coord())
+    circle = skso.Circle.best_fit([skso.Point((pt.X(), pt.Y())) for pt in points])
     circle_center_3d = gp_Pnt()
     plane.D0(circle.point[0], circle.point[1], circle_center_3d)
     # TODO: See if this AI-generated code works
-    YZplane = Geom_Plane(gp_Pnt(0,0,0), gp_Dir(1,0,0))
-    line = plane.Intersect(YZplane)
-    if line.IsNull():
-        raise ValueError("Plane of chine does not intersect YZ plane, cannot find endpoints.")
+    #YZplane = Geom_Plane(gp_Pnt(0,0,0), gp_Dir(1,0,0))
+    YZPlane = skso.Plane((0,0,0), (1,0,0))
+    line = sk_plane.intersect_plane(YZPlane)
     sphere = skso.Sphere(circle_center_3d.Coord(), circle.radius)
     endpoints = sphere.intersect_line(line)
     if len(endpoints) < 2:
         raise ValueError("Could not find two intersection points for chine endpoints, check geometry.")
-    return gp_Pnt(*endpoints[0]), gp_Pnt(*endpoints[1
+    return gp_Pnt(*endpoints[0]), gp_Pnt(*endpoints[1])
                                                     
 for idx in range(document.offsets.chine_count):
     document.member_planes[chine(idx)] = get_chine_plane(
-        document.offsets.get_member_coordinates(chine(idx), ['x', 'y', 'z' ]))
-    approximate_chine_endpoints(document.offsets.get_member_coordinates(chine(idx), ['x', 'y', 'z' ]), document.member_planes[chine(idx)])
+        document.offsets.get_member_coordinates(chine(idx), ['x', 'y', 'z' ])
+    )
+    geomPln = Geom_Plane(document.member_planes[chine(idx)])
+    #TODO: Either chine_2d needs to be tuples, or minimum_energy_bspline needs to be updated to accept gp_Pnt2d instead of tuples. Currently this is a bit of a mess.
+    chine_2d = project_points_to_plane(
+        document.offsets.get_member_coordinates(chine(idx), ['x', 'y', 'z' ]), 
+        document.member_planes[chine(idx)]
+    )
+    endpoints = approximate_chine_endpoints(chine_2d, document.member_planes[chine(idx)])
+    bow_pt = gp_Pnt()
+    stern_pt = gp_Pnt()
+    geomPln.D0(endpoints[0].X(), endpoints[0].Y(), bow_pt)
+    geomPln.D0(endpoints[1].X(), endpoints[1].Y(), stern_pt)
+    chine_2d.insert(0, bow_pt)
+    chine_2d.append(stern_pt)
+    #spline = minimum_energy_bspline(chine_2d, 3)
+    #document.member_curves[chine(idx)] = bspline_to_occ_bspline(spline)
+
 
 document.member_planes[GUNWALE] = get_chine_plane(
     document.offsets.get_member_coordinates(GUNWALE, ['x', 'y', 'z' ])
