@@ -1,0 +1,65 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "http://atomicllama.com/schemas/kayak_offset_table.json",
+    "title": "Table of Offsets",
+    "description": "Table of Offsets for a fuselage-frame kayak",
+    "type": "object",
+    "required": ["units", "stations"],
+    "properties": {
+        "units": {
+            "enum": ["mm", "cm", "inches", "feet"],
+            "description": "Units for the measurements in the table"
+        },
+        "name": {
+            "type": "string",
+            "description": "Name of the kayak design"
+        },
+        "stations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["location", "gunwale", "chines", "keel", "deckridge"],
+                "properties": {
+                    "location": {
+                        "type": "number",
+                        "description": "Distance of the station from the bow along the length of the kayak"
+                    },
+                    "gunwale": {
+                        "$ref": "#/$defs/offset",
+                        "description": "Offsets for the gunwale at this station"
+                    },
+                    "chines": {
+                        "type": "array",
+                        "items": { "$ref": "#/$defs/offset" },
+                        "description": "Offsets for the chines at this station",
+                        "minItems": 1
+                    },
+                    "keel": {
+                        "type": "number",
+                        "description": "Height above baseline of the keel at this station"
+                    },
+                    "deckridge": {
+                        "$ref": "#/$defs/offset",
+                        "description": "Offset of the deckridge at this station"
+                    }
+                }
+            }
+        }
+    },
+    "$defs": {
+        "offset": {
+            "type": "object",
+            "required": ["hab", "hb"],
+            "properties": {
+                "hab": {
+                    "type": "number",
+                    "description": "Height above the baseline at this station"
+                },
+                "hb": {
+                    "type": "number",
+                    "description": "Half-breadth at this station"
+                }
+            }
+        }
+    }
+}
