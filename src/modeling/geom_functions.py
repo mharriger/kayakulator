@@ -124,3 +124,61 @@ def segment_polyline_near_straight(points: list[gp_Pnt2d], max_dev=2.0) -> list[
         start = seg_end
     
     return segments
+
+def trimCurveWithCurve(curveToTrim, otherCurve):
+    """
+    Trim a Geom2d_Curve using another curve.
+    
+    Args:
+        curveToTrim: The Geom2d_Curve object to be trimmed
+        otherCurve: The Geom2d_Curve object to trim with
+        
+    Returns:
+        If no intersection: returns the original curve
+        If one intersection: returns the larger piece
+        If two intersections: returns the section between them
+        
+    Raises:
+        ValueError: If curves intersect more than twice
+    """
+    # Find intersections between the two curves
+    inter = Geom2dAPI_InterCurveCurve(curveToTrim, otherCurve)
+    num_intersections = inter.NbPoints()
+    
+    if num_intersections == 0:
+        # No intersection, return the original curve
+        return curveToTrim
+    
+    elif num_intersections == 1:
+        # One intersection, return the larger piece
+        t_intersect = inter.Intersector().Point(1).ParamOnFirst()  # Parameter on curveToTrim
+        
+        # Get the curve's parameter range
+        curve_handle = curveToTrim
+        u_min = curve_handle.FirstParameter()
+        u_max = curve_handle.LastParameter()
+        
+        # Calculate lengths of both pieces
+        length1 = abs(t_intersect - u_min)
+        length2 = abs(u_max - t_intersect)
+        
+        # Return the larger piece
+        if length1 >= length2:
+            return Geom2d_TrimmedCurve(curve_handle, u_min, t_intersect)
+        else:
+            return Geom2d_TrimmedCurve(curve_handle, t_intersect, u_max)
+    
+    elif num_intersections == 2:
+        # Two intersections, return the section between them
+        t1 = inter.Intersector().Point(1).ParamOnFirst()  # Parameter on curveToTrim for first intersection
+        t2 = inter.Intersector().Point(2).ParamOnFirst()  # Parameter on curveToTrim for second intersection
+        
+        # Ensure t1 < t2
+        if t1 > t2:
+            t1, t2 = t2, t1
+        
+        return Geom2d_TrimmedCurve(curveToTrim, t1, t2)
+    
+    else:
+        # More than two intersections
+        raise ValueError(f"Curve intersection resulted in {num_intersections} points. Expected 0, 1, or 2.")

@@ -23,13 +23,13 @@ class KayakulatorDocument:
         self.frame_locations:list[float] = []
         self.model: KayakModel = None
     
-    def model_kayak(self):
+    def model_kayak(self, status_callback=None):
         """
         Model the kayak based on the offset table
         """
         if OffsetTable.chine_count == 0 or OffsetTable.station_count == 0:
             raise RuntimeError('No offset data')
-        self.model = KayakModel(self.offsets)
+        self.model = KayakModel(self.offsets, progress_callback=status_callback)
 
     def save_to_file(self, filename: str):
         raise NotImplementedError("Saving to file is not implemented yet")
