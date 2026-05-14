@@ -1,0 +1,78 @@
+{
+  "name": "Sea Rover ST",
+  "units": "mm",
+  "stations": [
+    {
+      "location": 914.4,
+      "keel": 26.8224,
+      "chines": [
+        { "hb": 53.34, "hab": 53.34 }
+      ],
+      "gunwale": { "hb": 136.5504, "hab": 183.7944 },
+      "deckridge": { "hb": 0.0, "hab": 236.22 }
+    },
+    {
+      "location": 1371.6,
+      "keel": 13.4112,
+      "chines": [
+        { "hb": 117.96, "hab": 41.148 }
+      ],
+      "gunwale": { "hb": 183.1848, "hab": 167.9448 },
+      "deckridge": { "hb": 0.0, "hab": 239.8776 }
+    },
+    {
+      "location": 1828.8,
+      "keel": 4.572,
+      "chines": [
+        { "hb": 160.9344, "hab": 32.9184 }
+      ],
+      "gunwale": { "hb": 214.884, "hab": 156.0576 },
+      "deckridge": { "hb": 0.0, "hab": 243.5352 }
+    },
+    {
+      "location": 2301.24,
+      "keel": 0.6096,
+      "chines": [
+        { "hb": 183.7944, "hab": 28.6512 }
+      ],
+      "gunwale": { "hb": 232.2576, "hab": 148.4376 },
+      "deckridge": { "hb": 60.96, "hab": 247.4976 }
+    },
+    {
+      "location": 3063.24,
+      "keel": 2.7432,
+      "chines": [
+        { "hb": 178.0032, "hab": 29.5656 }
+      ],
+      "gunwale": { "hb": 227.3808, "hab": 146.6088 },
+      "deckridge": { "hb": 127.1016, "hab": 202.9968 }
+    },
+    {
+      "location": 3423.8184,
+      "keel": 7.62,
+      "chines": [
+        { "hb": 157.5816, "hab": 33.528 }
+      ],
+      "gunwale": { "hb": 210.9216, "hab": 149.6568 },
+      "deckridge": { "hb": 99.6696, "hab": 202.9968 }
+    },
+    {
+      "location": 3845.6616,
+      "keel": 15.8496,
+      "chines": [
+        { "hb": 120.7008, "hab": 40.5384 }
+      ],
+      "gunwale": { "hb": 180.1368, "hab": 156.3624 },
+      "deckridge": { "hb": 67.056, "hab": 202.9968 }
+    },
+    {
+      "location": 4267.2,
+      "keel": 27.1272,
+      "chines": [
+        { "hb": 69.7992, "hab": 50.292 }
+      ],
+      "gunwale": { "hb": 136.5504, "hab": 167.0304 },
+      "deckridge": { "hb": 35.052, "hab": 202.9968 }
+    }
+  ]
+}

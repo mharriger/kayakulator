@@ -1,0 +1,61 @@
+{
+  "name": "Sea Tour 15 EXP",
+  "units": "feet",
+  "stations": [
+    {
+      "location": 2.8,
+      "keel": 0.167,
+      "chines": [
+        { "hb": 0.209, "hab": 0.248 },
+        { "hb": 0.361, "hab": 0.350 },
+        { "hb": 0.437, "hab": 0.499 }
+      ],
+      "gunwale": { "hb": 0.549, "hab": 0.827 },
+      "deckridge": { "hb": 0.0, "hab": 0.97 }
+    },
+    {
+      "location": 4.8,
+      "keel": 0.056,
+      "chines": [
+        { "hb": 0.420, "hab": 0.115 },
+        { "hb": 0.654, "hab": 0.215 },
+        { "hb": 0.745, "hab": 0.382 }
+      ],
+      "gunwale": { "hb": 0.851, "hab": 0.722 },
+      "deckridge": { "hb": 0.0, "hab": 0.94 }
+    },
+    {
+      "location": 6.8,
+      "keel": 0.005,
+      "chines": [
+        { "hb": 0.515, "hab": 0.049 },
+        { "hb": 0.786, "hab": 0.147 },
+        { "hb": 0.885, "hab": 0.319 }
+      ],
+      "gunwale": { "hb": 0.990, "hab": 0.660 },
+      "deckridge": { "hb": 0.200, "hab": 0.92 }
+    },
+    {
+      "location": 9.3,
+      "keel": 0.018,
+      "chines": [
+        { "hb": 0.478, "hab": 0.055 },
+        { "hb": 0.735, "hab": 0.155 },
+        { "hb": 0.829, "hab": 0.319 }
+      ],
+      "gunwale": { "hb": 0.934, "hab": 0.647 },
+      "deckridge": { "hb": 0.0, "hab": 0.65 }
+    },
+    {
+      "location": 11.8,
+      "keel": 0.110,
+      "chines": [
+        { "hb": 0.275, "hab": 0.156 },
+        { "hb": 0.449, "hab": 0.260 },
+        { "hb": 0.523, "hab": 0.400 }
+      ],
+      "gunwale": { "hb": 0.623, "hab": 0.700 },
+      "deckridge": { "hb": 0.0, "hab": 0.7 }
+    }
+  ]
+}
