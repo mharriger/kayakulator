@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from OCC.Core.gp import gp_Vec2d, gp_Trsf2d, gp_Trsf, gp_Pnt2d, gp_Dir2d, gp_Dir, gp_Pnt, gp_Ax2
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
-from OCC.Core.TopoDS import TopoDS_Wire
+from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Face
 from OCC.Core.GeomAPI import geomapi
 from OCC.Core.Geom2d import Geom2d_Line
 from OCC.Extend.TopologyUtils import TopologyExplorer
@@ -11,7 +11,7 @@ from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakePipe
 from OCC.Core.TopoDS import TopoDS_Shape
 from OCC.Core.TopLoc import TopLoc_Location
 
-from .geom_functions import trimCurveWithCurve
+from .geom_functions import trimCurveWithCurve, make_pipe_profile_circle, make_pipe_profile_rectangle
 
 class StringerModel(ABC):
     """
@@ -19,12 +19,12 @@ class StringerModel(ABC):
     """
     modeling_complete: bool = False
     _geometry_list: list = []
-    _profile: TopoDS_Shape = None
+    _profile_shape: str = None
 
     def make_pipe(self):
         if not self.modeling_complete:
             raise RuntimeError("Modeling not complete, cannot make pipe")
-        if not self._profile:
+        if not self._profile_shape:
             raise RuntimeError("Profile not set, cannot make pipe")
         # Get that tangent vector at the start of the curve
         curve = self._geometry_list[0]
@@ -39,9 +39,13 @@ class StringerModel(ABC):
         loc = gp_Pnt()
         curve3d.D0(0, loc)
         pos = gp_Ax2(loc, tangent)
-        self._profile.SetPosition(pos)
-        edge = BRepBuilderAPI_MakeEdge(self._profile).Edge()
-        pipe_maker = BRepOffsetAPI_MakePipe(w.Wire(), edge)
+        
+        if self._profile_shape == "circle":
+            profile_face = make_pipe_profile_circle(pos, radius=25.4/2)
+        elif self._profile_shape == "rectangle":
+            profile_face = make_pipe_profile_rectangle(pos, width=25.4, height=12.7)
+            
+        pipe_maker = BRepOffsetAPI_MakePipe(w.Wire(), profile_face)
         pipe_maker.Build()
         pipe = pipe_maker.Shape()
         return pipe

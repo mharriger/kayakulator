@@ -1,9 +1,14 @@
 from PySide6.QtWidgets import(
+     QHBoxLayout,
+     QLabel,
      QMainWindow,
+     QRadioButton,
      QToolBar,
      QFileDialog,
      QErrorMessage,
-     QStyle
+     QStyle,
+     QVBoxLayout,
+     QWidget
 )
 from PySide6.QtGui import (
     QAction,
@@ -11,7 +16,7 @@ from PySide6.QtGui import (
     QKeySequence
 )
 
-from PySide6.QtCore import QThreadPool
+from PySide6.QtCore import QThreadPool, QSize
 
 from .modeling_worker import ModelingWorker, ModelingWorkerSignals
 
@@ -42,20 +47,30 @@ class MainWindow(QMainWindow):
         self.mainToolbar = MainToolbar(self)
         self.addToolBar(self.mainToolbar)
 
-        # Set the central widget of the Window.
-        self.setCentralWidget(self.canvas)
+        # Use hbox layout
+        self.optionsPanel = OptionsPanel(self)
+        layout = QHBoxLayout()
+        layout.addWidget(self.optionsPanel)
+        layout.addWidget(self.canvas)
+        self.canvas.setSizePolicy(
+            qtDisplay.QtWidgets.QSizePolicy.Policy.Expanding,
+            qtDisplay.QtWidgets.QSizePolicy.Policy.Expanding)
+        widget = QWidget()
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
+        self.optionsPanel.adjustSize()
+
+        # Initialize the 3D viewer
         self.canvas.InitDriver()
         self.display = self.canvas._display
 
         # Make the curves look smooth
-        #self.display.Context.DefaultDrawer().SetTypeOfDeflection(Aspect_TOD_ABSOLUTE)
+        self.display.Context.DefaultDrawer().SetTypeOfDeflection(Aspect_TOD_ABSOLUTE)
+        # Using the default value causes the app to crash, so set it to something higher
+        self.display.Context.DefaultDrawer().SetMaximalChordialDeviation(1)
         
         self.display.set_bg_gradient_color([64, 64, 64], [211, 211, 211])
         self.display.display_triedron()
-        self.shape_list = []
-    
-    def displayShape(self, shape):
-        self.shape_list.append(self.display.DisplayShape(shape, update=True)[0])
 
     def open_clicked(self, s):
         fileName = QFileDialog.getOpenFileName(self,
@@ -69,6 +84,8 @@ class MainWindow(QMainWindow):
         offsets = load_offset_file(fileName[0])
         self._current_document = KayakulatorDocument()
         self._current_document.offsets = offsets
+        # Set the profile shape from the current UI selection
+        self._current_document.profile_shape = self.optionsPanel.get_profile_shape()
         print(self._current_document.offsets.format_table())
         self._current_document.name = get_metadata(fileName[0])['name']
         print(f"Loaded kayak: {self._current_document.name}")
@@ -98,6 +115,58 @@ class MainWindow(QMainWindow):
         for chine in self._current_document.model._chines:
             pipe = chine.make_pipe()
             self.display.DisplayShape(pipe, color="RED")
+
+    def on_profile_shape_changed(self):
+        """Handle profile shape change - remodel and redraw if a document is loaded"""
+        if self._current_document is not None and self._current_document.offsets is not None:
+            self.display.EraseAll()
+            self._current_document.profile_shape = self.optionsPanel.get_profile_shape()
+            worker = ModelingWorker(self._current_document)
+            worker.signals.finished.connect(self.display_model)
+            worker.signals.error.connect(self.notify_error)
+            worker.signals.status.connect(self.update_status)
+            self._threadpool.start(worker)
+
+class OptionsPanel(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self._parent = parent
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        shapeRadioLayout = QVBoxLayout()
+        shapeRadioLayout.addWidget(QLabel("Profile Shape"))
+        self.circleRadio = QRadioButton("Circle")
+        self.circleRadio.setChecked(True)
+        shapeRadioLayout.addWidget(self.circleRadio)
+        self.rectangleRadio = QRadioButton("Rectangle")
+        shapeRadioLayout.addWidget(self.rectangleRadio)
+        layout.addLayout(shapeRadioLayout)
+        layout.addStretch()
+
+        self.setSizePolicy(
+            qtDisplay.QtWidgets.QSizePolicy.Policy.Minimum,
+            qtDisplay.QtWidgets.QSizePolicy.Policy.MinimumExpanding
+        )
+        self.circleRadio.toggled.connect(self.profileShapechanged)
+        self.rectangleRadio.toggled.connect(self.profileShapechanged)
+
+    def sizeHint(self):
+        return QSize(200, 200)
+    
+    def get_profile_shape(self) -> str:
+        """Get the currently selected profile shape."""
+        if self.circleRadio.isChecked():
+            return "circle"
+        elif self.rectangleRadio.isChecked():
+            return "rectangle"
+        return "circle"  # Default to circle
+    
+    def profileShapechanged(self):
+        profile = self.get_profile_shape()
+        print(f"{profile.capitalize()} profile selected")
+        # Trigger remodeling if a document is loaded
+        self._parent.on_profile_shape_changed()
+
 
 class MainToolbar(QToolBar):
     def __init__(self, parent):

@@ -16,12 +16,14 @@ class KayakulatorDocument:
     frame_locations: list[float]  # distance of the frame from the nominal bow location
     member_planes: dict[Member, gp_Pln]  # TODO: Either create base class for planes, or use a plane object from OCC
     member_curves: dict[Member, any]  # TODO: Either create base class for curves, or use a curve object from OCC
+    profile_shape: str  # "circle" or "rectangle"
 
     def __init__(self, name: str | None = None):
         self.name: str = name
         self.offsets: OffsetTable = None
         self.frame_locations:list[float] = []
         self.model: KayakModel = None
+        self.profile_shape: str = "circle"  # Default to circle
     
     def model_kayak(self, status_callback=None):
         """
@@ -29,7 +31,7 @@ class KayakulatorDocument:
         """
         if OffsetTable.chine_count == 0 or OffsetTable.station_count == 0:
             raise RuntimeError('No offset data')
-        self.model = KayakModel(self.offsets, progress_callback=status_callback)
+        self.model = KayakModel(self.offsets, progress_callback=status_callback, profile_shape=self.profile_shape)
 
     def save_to_file(self, filename: str):
         raise NotImplementedError("Saving to file is not implemented yet")

@@ -1,10 +1,14 @@
-from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Lin, gp_Dir, gp_Dir2d, gp_Pln, gp_Ax1, gp_Ax3, gp_Ax2d
+from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Lin, gp_Dir, gp_Dir2d, gp_Pln, gp_Ax1, gp_Ax2, gp_Ax3, gp_Ax2d, gp_Circ, gp_Trsf
 from OCC.Core.Geom import Geom_Plane, Geom_Line
 from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf, GeomAPI_IntSS, GeomAPI_ProjectPointOnCurve
 from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve, Geom2dAPI_ProjectPointOnCurve
 from OCC.Core.Geom2d import Geom2d_Circle, Geom2d_Line, Geom2d_TrimmedCurve
 from OCC.Core.IntAna import IntAna_IntConicQuad
 from OCC.Core.GCE2d import GCE2d_MakeSegment
+from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform, BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
+from OCC.Extend.TopologyUtils import TopologyExplorer
+from OCC.Core.GC import GC_MakeCircle
+from OCC.Core.TopoDS import TopoDS_Face
 
 import skspatial.objects as skso
 
@@ -182,3 +186,55 @@ def trimCurveWithCurve(curveToTrim, otherCurve):
     else:
         # More than two intersections
         raise ValueError(f"Curve intersection resulted in {num_intersections} points. Expected 0, 1, or 2.")
+
+def make_pipe_profile_circle(target_axes: gp_Ax2, radius: float) -> TopoDS_Face:
+    """
+    Creates a circular profile face where the rightmost point of the circle
+    is perfectly aligned with the target_axes position and orientation.
+    """
+    # 1. To put the rightmost point at (0,0), the center must shift left by radius along -X
+    local_center = gp_Pnt(-radius, 0.0, 0.0)
+    local_axes = gp_Ax2(local_center, gp_Dir(0, 0, 1)) # Flat on XY plane
+    
+    # 2. Build the geometry in local space
+    circle_geom = GC_MakeCircle(local_axes, radius).Value()
+    edge = BRepBuilderAPI_MakeEdge(circle_geom).Edge()
+    wire = BRepBuilderAPI_MakeWire(edge).Wire()
+    local_face = BRepBuilderAPI_MakeFace(wire).Face()
+    
+    # 3. Transform the local face from the global origin to the target gp_Ax2
+    trsf = gp_Trsf()
+    # Maps standard global axes (0,0,0) to your custom target coordinate system
+    trsf.SetTransformation(gp_Ax3(target_axes), gp_Ax3()) 
+    
+    transformer = BRepBuilderAPI_Transform(local_face, trsf, True)
+    w = BRepBuilderAPI_MakeWire()
+    te = TopologyExplorer(transformer.Shape())
+    if len(list(te.edges())) != 1:
+        raise RuntimeError("Unexpected number of edges in transformed profile")
+    w.Add(list(te.edges())[0])
+    return BRepBuilderAPI_MakeFace(w.Wire()).Face()
+
+def make_pipe_profile_rectangle(target_axes: gp_Ax2, width: float, height: float) -> TopoDS_Face:
+    """
+    Creates a rectangular profile face where the center of the right side 
+    is perfectly aligned with the target_axes position and orientation.
+    """
+    # 1. Compute local 2D bounds relative to the right-center point at (0,0)
+    # The right edge is at X=0, so the left edge is at X=-width
+    # The vertical center is at Y=0, so Y bounds go from -height/2 to +height/2
+    x_min = -width
+    x_max = 0.0
+    y_min = -height / 2.0
+    y_max = height / 2.0
+    
+    # 2. Create a flat XY face using local parametric bounds
+    local_axes = gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1))
+    local_face = BRepBuilderAPI_MakeFace(gp_Pln(local_axes), x_min, x_max, y_min, y_max).Face()
+    
+    # 3. Transform the local face to the target gp_Ax2 position and orientation
+    trsf = gp_Trsf()
+    trsf.SetTransformation(gp_Ax3(target_axes), gp_Ax3())
+    
+    transformer = BRepBuilderAPI_Transform(local_face, trsf, True)
+    return transformer.Shape()
