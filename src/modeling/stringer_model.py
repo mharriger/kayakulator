@@ -44,8 +44,8 @@ class StringerModel(ABC):
         pipe_maker = BRepOffsetAPI_MakePipe(w.Wire(), profile)
         pipe_maker.Build()
         pipe = pipe_maker.Shape()
-        trim_shape_with_plane(pipe, YZ_PLANE, gp_Pnt(-1,0,0))
-        return pipe
+        trimmed = trim_shape_with_plane(pipe, YZ_PLANE, gp_Pnt(-1,0,0))
+        return trimmed
     
     @property
     def wires(self) -> list[TopoDS_Wire]:
