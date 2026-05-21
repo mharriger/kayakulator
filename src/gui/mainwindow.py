@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import(
      QHBoxLayout,
+     QLayout,
      QLabel,
      QMainWindow,
      QRadioButton,
@@ -8,7 +9,8 @@ from PySide6.QtWidgets import(
      QErrorMessage,
      QStyle,
      QVBoxLayout,
-     QWidget
+     QWidget,
+     QLineEdit
 )
 from PySide6.QtGui import (
     QAction,
@@ -17,6 +19,9 @@ from PySide6.QtGui import (
 )
 
 from PySide6.QtCore import QThreadPool, QSize
+
+from modeling.geom_functions import make_rectangle_face, make_circle_face
+from modeling.profile_shape_config import ProfileShapeConfig
 
 from .modeling_worker import ModelingWorker, ModelingWorkerSignals
 
@@ -84,8 +89,7 @@ class MainWindow(QMainWindow):
         offsets = load_offset_file(fileName[0])
         self._current_document = KayakulatorDocument()
         self._current_document.offsets = offsets
-        # Set the profile shape from the current UI selection
-        self._current_document.profile_shape = self.optionsPanel.get_profile_shape()
+        self._current_document.profile_shape_config = self.optionsPanel.create_profile_shape_config()
         print(self._current_document.offsets.format_table())
         self._current_document.name = get_metadata(fileName[0])['name']
         print(f"Loaded kayak: {self._current_document.name}")
@@ -120,7 +124,7 @@ class MainWindow(QMainWindow):
         """Handle profile shape change - remodel and redraw if a document is loaded"""
         if self._current_document is not None and self._current_document.offsets is not None:
             self.display.EraseAll()
-            self._current_document.profile_shape = self.optionsPanel.get_profile_shape()
+            self._current_document.profile_shape_config = self.optionsPanel.create_profile_shape_config()
             worker = ModelingWorker(self._current_document)
             worker.signals.finished.connect(self.display_model)
             worker.signals.error.connect(self.notify_error)
@@ -138,23 +142,88 @@ class OptionsPanel(QWidget):
         self.circleRadio = QRadioButton("Circle")
         self.circleRadio.setChecked(True)
         shapeRadioLayout.addWidget(self.circleRadio)
+        self.radiusLabel = QLabel("Radius (mm)")
+        self.radiusInput = QLineEdit("12.7")
+        shapeRadioLayout.addWidget(self.radiusLabel)
+        shapeRadioLayout.addWidget(self.radiusInput)
         self.rectangleRadio = QRadioButton("Rectangle")
+        self.widthLabel = QLabel("Width (mm)")
+        self.widthInput = QLineEdit("25.4")
+        self.heightLabel = QLabel("Height (mm)")
+        self.heightInput = QLineEdit("12.7")
+        self.showHideProfileParameters()
         shapeRadioLayout.addWidget(self.rectangleRadio)
+        shapeRadioLayout.addWidget(self.widthLabel)
+        shapeRadioLayout.addWidget(self.widthInput)
+        shapeRadioLayout.addWidget(self.heightLabel)
+        shapeRadioLayout.addWidget(self.heightInput)
+
+        self.radiusLabel.setMaximumWidth(100)
+        self.radiusInput.setMaximumWidth(50)
+        self.widthLabel.setMaximumWidth(100)
+        self.heightInput.setMaximumWidth(50)
+        self.heightLabel.setMaximumWidth(100)
+        self.widthInput.setMaximumWidth(50)
+
         layout.addLayout(shapeRadioLayout)
         layout.addStretch()
+        shapeRadioLayout.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
 
         self.setSizePolicy(
-            qtDisplay.QtWidgets.QSizePolicy.Policy.Minimum,
+            qtDisplay.QtWidgets.QSizePolicy.Policy.Maximum,
             qtDisplay.QtWidgets.QSizePolicy.Policy.MinimumExpanding
         )
         self.circleRadio.toggled.connect(self.profileShapechanged)
         self.rectangleRadio.toggled.connect(self.profileShapechanged)
 
+    def showHideProfileParameters(self):
+        if self.circleRadio.isChecked():
+            self.radiusLabel.show()
+            self.radiusInput.show()
+            self.widthLabel.hide()
+            self.widthInput.hide()
+            self.heightLabel.hide()
+            self.heightInput.hide()
+        elif self.rectangleRadio.isChecked():
+            self.radiusLabel.hide()
+            self.radiusInput.hide()
+            self.widthLabel.show()
+            self.widthInput.show()
+            self.heightLabel.show()
+            self.heightInput.show()
+
     def sizeHint(self):
-        return QSize(200, 200)
+        return QSize(150, 150)
+    
+    def _create_single_shape(self):
+        """Create a single profile shape based on current settings."""
+        if self.circleRadio.isChecked():
+            return make_circle_face(radius=float(self.radiusInput.text()) / 2)
+        else:
+            return make_rectangle_face(
+                width=float(self.widthInput.text()), 
+                height=float(self.heightInput.text())
+            )
+    
+    def create_profile_shape_config(self) -> ProfileShapeConfig:
+        """Create the profile shape configuration based on current settings."""
+        config = ProfileShapeConfig()
+        shape = self._create_single_shape()
+        
+        # For now, use same shape for all members
+        config.set_all(shape)
+        
+        # Future: Can be extended to do:
+        # config.gunwale = self._create_gunwale_shape()
+        # config.keel = self._create_keel_shape()
+        # etc.
+        
+        return config
     
     def get_profile_shape(self) -> str:
         """Get the currently selected profile shape."""
+        self.showHideProfileParameters()
         if self.circleRadio.isChecked():
             return "circle"
         elif self.rectangleRadio.isChecked():

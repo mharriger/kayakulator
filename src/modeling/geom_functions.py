@@ -6,9 +6,11 @@ from OCC.Core.Geom2d import Geom2d_Circle, Geom2d_Line, Geom2d_TrimmedCurve
 from OCC.Core.IntAna import IntAna_IntConicQuad
 from OCC.Core.GCE2d import GCE2d_MakeSegment
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform, BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
+from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut
 from OCC.Extend.TopologyUtils import TopologyExplorer
 from OCC.Core.GC import GC_MakeCircle
-from OCC.Core.TopoDS import TopoDS_Face
+from OCC.Core.TopoDS import TopoDS_Face, TopoDS_Shape
 
 import skspatial.objects as skso
 
@@ -187,7 +189,7 @@ def trimCurveWithCurve(curveToTrim, otherCurve):
         # More than two intersections
         raise ValueError(f"Curve intersection resulted in {num_intersections} points. Expected 0, 1, or 2.")
 
-def make_pipe_profile_circle(target_axes: gp_Ax2, radius: float) -> TopoDS_Face:
+def make_circle_face(radius: float) -> TopoDS_Face:
     """
     Creates a circular profile face where the rightmost point of the circle
     is perfectly aligned with the target_axes position and orientation.
@@ -200,22 +202,9 @@ def make_pipe_profile_circle(target_axes: gp_Ax2, radius: float) -> TopoDS_Face:
     circle_geom = GC_MakeCircle(local_axes, radius).Value()
     edge = BRepBuilderAPI_MakeEdge(circle_geom).Edge()
     wire = BRepBuilderAPI_MakeWire(edge).Wire()
-    local_face = BRepBuilderAPI_MakeFace(wire).Face()
-    
-    # 3. Transform the local face from the global origin to the target gp_Ax2
-    trsf = gp_Trsf()
-    # Maps standard global axes (0,0,0) to your custom target coordinate system
-    trsf.SetTransformation(gp_Ax3(target_axes), gp_Ax3()) 
-    
-    transformer = BRepBuilderAPI_Transform(local_face, trsf, True)
-    w = BRepBuilderAPI_MakeWire()
-    te = TopologyExplorer(transformer.Shape())
-    if len(list(te.edges())) != 1:
-        raise RuntimeError("Unexpected number of edges in transformed profile")
-    w.Add(list(te.edges())[0])
-    return BRepBuilderAPI_MakeFace(w.Wire()).Face()
+    return BRepBuilderAPI_MakeFace(wire).Face()
 
-def make_pipe_profile_rectangle(target_axes: gp_Ax2, width: float, height: float) -> TopoDS_Face:
+def make_rectangle_face(width: float, height: float) -> TopoDS_Face:
     """
     Creates a rectangular profile face where the center of the right side 
     is perfectly aligned with the target_axes position and orientation.
@@ -230,11 +219,34 @@ def make_pipe_profile_rectangle(target_axes: gp_Ax2, width: float, height: float
     
     # 2. Create a flat XY face using local parametric bounds
     local_axes = gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1))
-    local_face = BRepBuilderAPI_MakeFace(gp_Pln(local_axes), x_min, x_max, y_min, y_max).Face()
-    
-    # 3. Transform the local face to the target gp_Ax2 position and orientation
+    return BRepBuilderAPI_MakeFace(gp_Pln(local_axes), x_min, x_max, y_min, y_max).Face()
+
+def place_shape_on_curve_tangent(shape: TopoDS_Shape, tangent: gp_Ax2) -> TopoDS_Face:
+    """
+    Transform a TopoDS_Shape to align it with the given tangent direction and position.
+    """
     trsf = gp_Trsf()
-    trsf.SetTransformation(gp_Ax3(target_axes), gp_Ax3())
+    # Maps standard global axes (0,0,0) to your custom target coordinate system
+    trsf.SetTransformation(gp_Ax3(tangent), gp_Ax3()) 
     
-    transformer = BRepBuilderAPI_Transform(local_face, trsf, True)
+    transformer = BRepBuilderAPI_Transform(trsf)
+    transformer.Perform(shape)  # True to copy the shape
     return transformer.Shape()
+
+def trim_shape_with_plane(shape: TopoDS_Shape, plane: gp_Pln, pt: gp_Pnt) -> TopoDS_Shape:
+    """
+    Trim a TopoDS_Shape with a plane, keeping only the portion on the opposite side from pt
+    """
+    # Create a half space from the plane and point
+    face = BRepBuilderAPI_MakeFace(plane).Face()
+    halfspace = BRepPrimAPI_MakeHalfSpace(face, pt).Solid();
+    
+    # Use BRepAlgoAPI_Cut to trim the shape with the plane face
+    from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut
+    cutter = BRepAlgoAPI_Cut(shape, halfspace)
+    cutter.Build()
+    
+    if not cutter.IsDone():
+        raise RuntimeError("Trimming operation failed.")
+    
+    return cutter.Shape()

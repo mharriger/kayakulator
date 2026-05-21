@@ -11,7 +11,7 @@ from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakePipe
 from OCC.Core.TopoDS import TopoDS_Shape
 from OCC.Core.TopLoc import TopLoc_Location
 
-from .geom_functions import trimCurveWithCurve, make_pipe_profile_circle, make_pipe_profile_rectangle
+from .geom_functions import trimCurveWithCurve, place_shape_on_curve_tangent, trim_shape_with_plane, YZ_PLANE
 
 class StringerModel(ABC):
     """
@@ -19,14 +19,14 @@ class StringerModel(ABC):
     """
     modeling_complete: bool = False
     _geometry_list: list = []
-    _profile_shape: str = None
+    _profile_shape: TopoDS_Shape = None
 
     def make_pipe(self):
         if not self.modeling_complete:
             raise RuntimeError("Modeling not complete, cannot make pipe")
         if not self._profile_shape:
             raise RuntimeError("Profile not set, cannot make pipe")
-        # Get that tangent vector at the start of the curve
+        # Get the tangent vector at the start of the curve
         curve = self._geometry_list[0]
         curve3d = geomapi.To3d(curve, self._surface)
         props = GeomLProp_CLProps(curve3d, curve3d.FirstParameter(), 1, 1e-6)
@@ -39,15 +39,12 @@ class StringerModel(ABC):
         loc = gp_Pnt()
         curve3d.D0(0, loc)
         pos = gp_Ax2(loc, tangent)
-        
-        if self._profile_shape == "circle":
-            profile_face = make_pipe_profile_circle(pos, radius=25.4/2)
-        elif self._profile_shape == "rectangle":
-            profile_face = make_pipe_profile_rectangle(pos, width=25.4, height=12.7)
-            
-        pipe_maker = BRepOffsetAPI_MakePipe(w.Wire(), profile_face)
+        profile = place_shape_on_curve_tangent(self._profile_shape, pos)
+
+        pipe_maker = BRepOffsetAPI_MakePipe(w.Wire(), profile)
         pipe_maker.Build()
         pipe = pipe_maker.Shape()
+        trim_shape_with_plane(pipe, YZ_PLANE, gp_Pnt(-1,0,0))
         return pipe
     
     @property
