@@ -4,7 +4,7 @@ from kayakulator_document import KayakulatorDocument
 # ...
 
 class ModelingWorker(QRunnable):
-    """Model the kayakk in a separate thread"""
+    """Model the kayak in a separate thread"""
     _current_document: KayakulatorDocument = None
 
     def __init__(self, document: KayakulatorDocument):

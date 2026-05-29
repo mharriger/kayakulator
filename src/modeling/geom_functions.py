@@ -14,6 +14,8 @@ from OCC.Core.TopoDS import TopoDS_Face, TopoDS_Shape
 
 import skspatial.objects as skso
 
+from stringer_properties import ProfileShape
+
 YZ_PLANE = gp_Pln(gp_Pnt(0,0,0), gp_Dir())
 
 def intersect_plane_z_axis(plane) -> gp_Ax1:
@@ -189,6 +191,14 @@ def trimCurveWithCurve(curveToTrim, otherCurve):
         # More than two intersections
         raise ValueError(f"Curve intersection resulted in {num_intersections} points. Expected 0, 1, or 2.")
 
+def make_profile_shape(shapeSpecs: ProfileShape) -> TopoDS_Face:
+    if shapeSpecs.shape_type == "circle":
+        return make_circle_face(shapeSpecs.radius)
+    elif shapeSpecs.shape_type == "rectangle":
+        return make_rectangle_face(shapeSpecs.width, shapeSpecs.height)
+    else:
+        raise ValueError(f"Unknown profile shape type: {shapeSpecs.shape_type}")
+
 def make_circle_face(radius: float) -> TopoDS_Face:
     """
     Creates a circular profile face where the rightmost point of the circle
@@ -221,16 +231,33 @@ def make_rectangle_face(width: float, height: float) -> TopoDS_Face:
     local_axes = gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1))
     return BRepBuilderAPI_MakeFace(gp_Pln(local_axes), x_min, x_max, y_min, y_max).Face()
 
-def place_shape_on_curve_tangent(shape: TopoDS_Shape, tangent: gp_Ax2) -> TopoDS_Face:
+def construct_perpendicular_in_plane(plane: gp_Pln, line: gp_Lin, point: gp_Pnt):
+ 
+    # 2. Get the directional vectors
+    line_dir = line.Direction()
+    plane_normal = plane.Axis().Direction() # Or plane.Position().Direction()
+    
+    # 3. Compute a vector perpendicular to both the line and the plane's normal (in-plane direction)
+    # The cross product yields a direction orthogonal to the line, lying on the plane.
+    perp_dir = plane_normal.Crossed(line_dir)
+    
+    # 4. Construct the resulting line
+    # The perpendicular line shares the intersection point and the new direction vector
+    perp_line = gp_Lin(point, perp_dir)
+    
+    return perp_line
+
+def place_shape_by_ax2(shape: TopoDS_Shape, ax2: gp_Ax2, plane: gp_Pln) -> TopoDS_Face:
     """
-    Transform a TopoDS_Shape to align it with the given tangent direction and position.
+    Transform a TopoDS_Shape to align it with the given axis and position, and
+    calculate the normal of the curve at that point to orient the profile correctly in 3D space.
     """
     trsf = gp_Trsf()
     # Maps standard global axes (0,0,0) to your custom target coordinate system
-    trsf.SetTransformation(gp_Ax3(tangent), gp_Ax3()) 
+    trsf.SetTransformation(gp_Ax3(ax2), gp_Ax3()) 
     
     transformer = BRepBuilderAPI_Transform(trsf)
-    transformer.Perform(shape)  # True to copy the shape
+    transformer.Perform(shape)
     return transformer.Shape()
 
 def trim_shape_with_plane(shape: TopoDS_Shape, plane: gp_Pln, pt: gp_Pnt) -> TopoDS_Shape:
@@ -250,3 +277,30 @@ def trim_shape_with_plane(shape: TopoDS_Shape, plane: gp_Pln, pt: gp_Pnt) -> Top
         raise RuntimeError("Trimming operation failed.")
     
     return cutter.Shape()
+
+def mirror_shape_across_yz_plane(shape: TopoDS_Shape) -> TopoDS_Shape:
+    """
+    Mirror a TopoDS_Shape across the YZ plane (X=0).
+    
+    Creates a copy of the shape reflected across the YZ plane by negating the X coordinate.
+    This is useful for displaying both the starboard and port sides of the kayak in symmetry.
+    
+    Args:
+        shape: The TopoDS_Shape to mirror
+        
+    Returns:
+        A new TopoDS_Shape that is the mirror image of the input shape across the YZ plane
+    """
+    # Create a transformation that mirrors across the YZ plane (X=0)
+    # This is done by scaling X by -1
+    trsf = gp_Trsf()
+    trsf.SetMirror(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0)))  # Mirror across plane with normal (1,0,0)
+    
+    # Apply the transformation
+    transformer = BRepBuilderAPI_Transform(trsf)
+    transformer.Perform(shape, True)
+    
+    if not transformer.IsDone():
+        raise RuntimeError("Mirror transformation failed.")
+    
+    return transformer.Shape()

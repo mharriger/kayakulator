@@ -11,33 +11,31 @@ from .stringer_model import StringerModel
 
 class ChineModel(StringerModel):
     """
-    Model of a stringer (longitudinal frame member) of the kayak.
-    This class models a chine or gunwale, consisting of a single BSpline curve.
+    Model of a chine or gunwale, consisting of a single BSpline curve lying on a surface.
+
+    The shape of the chine curve is defined by offsets and endpoints. Offsets are a fixed part of the kayak
+    design, they do not change after initialization.
+
+    The surface is interpolated from the offsets, and does not change after initialization.
+
+    Endpoints may be set by the modeling algorithm or the user, and can be changed interactively. Changes
+    to endpoints require the geometric modeling to be recalculated. If endpoints are not provided at
+    initialization, this class automatically approximates them.
     """
-    def __init__(self, offsets: list[(float, float, float)] = None):
-        # ordered list of 2D stringer geometry items from bow to stern. May be
-        # discontinuous (e.g. deckridge has a gap for the cockpit)
-        self._geometry_list = []
-        self._surface = None # Surface that the 2D geometry lies on
-        self._endpoints = []
-
-        if offsets:
-            # Now do the steps to process the geometry
-            
-            # Make an OCC array of the offsets
-            self._offset_array = TColgp_Array1OfPnt(1, len(offsets))
-            for idx, pt in enumerate(offsets):
-                self._offset_array.SetValue(idx + 1, gp_Pnt(*pt))
-
-            # Best fit plane
-            self._surface = self._fit_plane()
-
-            self._find_endpoints_and_curve()
-
-            # Success
-            self.modeling_complete = True           
-
-    # Method to update the endpoints and recalculate
+    def __init__(self, offsets: list[(float, float, float)], endpoints: list[gp_Pnt] = None):
+        super().__init__()
+        self.modeling_complete = False
+        self._endpoints = endpoints
+        self._offsets = offsets
+        self._surface = self._fit_plane()
+        self._curve = None
+        if endpoints is None:
+            self._endpoints = approximate_endpoints(self.offsets2d)
+        if self._offsets is not None and len(self._offsets) > 1 and self.endpoints is not None and len(self.endpoints) == 2:
+            #Do the geometric modeling now if we have all the required data
+            self._fit_bspline()
+            self.modeling_complete = True
+    
     @property
     def endpoints(self) -> list[gp_Pnt, gp_Pnt]:
         return self._endpoints
@@ -50,9 +48,13 @@ class ChineModel(StringerModel):
             raise TypeError("Endpoints must be gp_Pnt")
         self.modeling_complete = False
         self._endpoints = value
-        self._find_endpoints_and_curve()
+        self._fit_bspline()
         self.modeling_complete = True
     
+    @property
+    def base_geometry(self):
+        return [self._curve]
+
     @property
     def endpoints_3d(self):
         plane = Geom_Plane(self._surface)
@@ -64,7 +66,10 @@ class ChineModel(StringerModel):
 
     def _fit_plane(self) -> gp_Pln:
         # Use OCC to find best fit plane
-        peq = GProp_PEquation(self._offset_array, 1)
+        offset_array = TColgp_Array1OfPnt(1, len(self._offsets))
+        for idx, pt in enumerate(self._offsets):
+            offset_array.SetValue(idx + 1, gp_Pnt(*pt))
+        peq = GProp_PEquation(offset_array, 1)
 
         if peq.IsPlanar():
             plane = peq.Plane()
@@ -77,16 +82,18 @@ class ChineModel(StringerModel):
 
         return plane
 
-    def _find_endpoints_and_curve(self):
-            # Planarize offsets
-            geomPln = Geom_Plane(self._surface)
-            chine_2d = project_gp_points_to_plane(self._offset_array, geomPln)
+    @property
+    def offsets2d(self):
+        geomPln = Geom_Plane(self._surface)
+        return project_gp_points_to_plane([gp_Pnt(*pt) for pt in self._offsets], geomPln)
 
-            # Approximate endpoints
-            self._endpoints = approximate_endpoints(chine_2d)
-            chine_2d.insert(0, self._endpoints[0])
-            chine_2d.append(self._endpoints[1])
-            
-            # Fit BSpline
-            bspline = minimum_energy_bspline([pt.Coord() for pt in chine_2d])
-            self._geometry_list.append(bspline_to_occ_bspline(bspline))
+    @property
+    def points2d(self):
+        pts_2d = self.offsets2d
+        pts_2d.insert(0, self._endpoints[0])
+        pts_2d.append(self._endpoints[1])
+        return pts_2d
+
+    def _fit_bspline(self):
+        bspline = minimum_energy_bspline([pt.Coord() for pt in self.points2d])
+        self._curve = bspline_to_occ_bspline(bspline)

@@ -20,17 +20,19 @@ from PySide6.QtGui import (
 
 from PySide6.QtCore import QThreadPool, QSize
 
-from modeling.geom_functions import make_rectangle_face, make_circle_face
-from modeling.profile_shape_config import ProfileShapeConfig
+from modeling.geom_functions import make_rectangle_face, make_circle_face, mirror_shape_across_yz_plane
+from stringer_properties import ProfileShape, ProfileCircle, ProfileRectangle
 
 from .modeling_worker import ModelingWorker, ModelingWorkerSignals
 
-from OCC.Core.Quantity import Quantity_NOC_DARKOLIVEGREEN
+from OCC.Core.Quantity import Quantity_NOC_DARKOLIVEGREEN, Quantity_NOC_BLACK, Quantity_NOC_GREEN, Quantity_Color, Quantity_NOC_BROWN
 
 COLORS = ["RED", "BLUE", "GREEN", "ORANGE", Quantity_NOC_DARKOLIVEGREEN, "YELLOW", "CYAN"]
 
 from OCC.Display.backend import load_backend
-from OCC.Core.Aspect import Aspect_TOD_ABSOLUTE
+from OCC.Core.Aspect import Aspect_TOD_ABSOLUTE, Aspect_TOL_SOLID
+from OCC.Core.Prs3d import Prs3d_LineAspect
+from OCC.Core.AIS import AIS_Shape
 
 load_backend("pyside6")
 import OCC.Display.qtDisplay as qtDisplay
@@ -73,6 +75,15 @@ class MainWindow(QMainWindow):
         self.display.Context.DefaultDrawer().SetTypeOfDeflection(Aspect_TOD_ABSOLUTE)
         # Using the default value causes the app to crash, so set it to something higher
         self.display.Context.DefaultDrawer().SetMaximalChordialDeviation(1)
+
+        #Show boundaries between faces
+        self.display.Context.DefaultDrawer().SetFaceBoundaryDraw(True)
+        line_aspect = Prs3d_LineAspect(
+            Quantity_Color(Quantity_NOC_BLACK), # Color (or use Quantity_NOC_RED, Quantity_NOC_WHITE etc.)
+            Aspect_TOL_SOLID,   # Line type
+            10.0               # Line thickness
+        )
+        self.display.Context.DefaultDrawer().SetFaceBoundaryAspect(line_aspect)
         
         self.display.set_bg_gradient_color([64, 64, 64], [211, 211, 211])
         self.display.display_triedron()
@@ -89,7 +100,7 @@ class MainWindow(QMainWindow):
         offsets = load_offset_file(fileName[0])
         self._current_document = KayakulatorDocument()
         self._current_document.offsets = offsets
-        self._current_document.profile_shape_config = self.optionsPanel.create_profile_shape_config()
+        self._current_document.default_profile_shape = self.optionsPanel.create_profile_shape_config()
         print(self._current_document.offsets.format_table())
         self._current_document.name = get_metadata(fileName[0])['name']
         print(f"Loaded kayak: {self._current_document.name}")
@@ -114,17 +125,51 @@ class MainWindow(QMainWindow):
             drawer.LineAspect().SetWidth(10.0)
             self.display.DisplayShape(wire, color=COLORS[idx % len(COLORS)])
             idx += 1
-        pipe = self._current_document.model._gunwale.make_pipe()
-        self.display.DisplayShape(pipe, color="GREEN")
+        
+        # Display gunwale pipe on both sides (starboard and port)
+        pipe = self._current_document.model._gunwale.pipe
+        shape = AIS_Shape(pipe)
+        drawer = shape.Attributes()
+
+        # Enable drawing face boundaries
+        drawer.SetFaceBoundaryDraw(True)
+
+        # Define and apply boundary line color, style, and thickness
+        line_aspect = Prs3d_LineAspect(
+            Quantity_Color(Quantity_NOC_BLACK), 
+            Aspect_TOL_SOLID, 
+            2.0 # Thickness
+        )
+        drawer.SetFaceBoundaryAspect(line_aspect)
+        drawer.SetColor(Quantity_Color(Quantity_NOC_BROWN))
+        self.display.Context.Display(shape, False)
+        mirrored_pipe = mirror_shape_across_yz_plane(pipe)
+        self.display.DisplayShape(mirrored_pipe, color="GREEN")
+        
+        # Display chine pipes on both sides (starboard and port)
         for chine in self._current_document.model._chines:
-            pipe = chine.make_pipe()
+            pipe = chine.pipe
             self.display.DisplayShape(pipe, color="RED")
+            mirrored_pipe = mirror_shape_across_yz_plane(pipe)
+            self.display.DisplayShape(mirrored_pipe, color="RED")
+        
+        # Display keel pipe on both sides (starboard and port)
+        pipe = self._current_document.model._keel.pipe
+        self.display.DisplayShape(pipe, color="BLUE")
+        mirrored_pipe = mirror_shape_across_yz_plane(pipe)
+        self.display.DisplayShape(mirrored_pipe, color="BLUE")
+
+        # Display deckridge pipe on both sides (starboard and port)
+        pipe = self._current_document.model._deckridge.pipe
+        self.display.DisplayShape(pipe, color="YELLOW")
+        mirrored_pipe = mirror_shape_across_yz_plane(pipe)
+        self.display.DisplayShape(mirrored_pipe, color="YELLOW")
 
     def on_profile_shape_changed(self):
         """Handle profile shape change - remodel and redraw if a document is loaded"""
         if self._current_document is not None and self._current_document.offsets is not None:
             self.display.EraseAll()
-            self._current_document.profile_shape_config = self.optionsPanel.create_profile_shape_config()
+            self._current_document.default_profile_shape = self.optionsPanel.create_profile_shape_config()
             worker = ModelingWorker(self._current_document)
             worker.signals.finished.connect(self.display_model)
             worker.signals.error.connect(self.notify_error)
@@ -206,20 +251,15 @@ class OptionsPanel(QWidget):
                 height=float(self.heightInput.text())
             )
     
-    def create_profile_shape_config(self) -> ProfileShapeConfig:
+    def create_profile_shape_config(self) -> ProfileShape:
         """Create the profile shape configuration based on current settings."""
-        config = ProfileShapeConfig()
-        shape = self._create_single_shape()
-        
-        # For now, use same shape for all members
-        config.set_all(shape)
-        
-        # Future: Can be extended to do:
-        # config.gunwale = self._create_gunwale_shape()
-        # config.keel = self._create_keel_shape()
-        # etc.
-        
-        return config
+        if self.circleRadio.isChecked():
+            return ProfileCircle(radius=float(self.radiusInput.text()) / 2)
+        else:
+            return ProfileRectangle(
+                width=float(self.widthInput.text()),
+                height=float(self.heightInput.text())
+            )
     
     def get_profile_shape(self) -> str:
         """Get the currently selected profile shape."""
