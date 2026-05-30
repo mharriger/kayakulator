@@ -22,10 +22,11 @@ from PySide6.QtCore import QThreadPool, QSize
 
 from modeling.geom_functions import make_rectangle_face, make_circle_face, mirror_shape_across_yz_plane
 from stringer_properties import ProfileShape, ProfileCircle, ProfileRectangle
+from offsets.member import KEEL, GUNWALE, chine, DECKRIDGE
 
 from .modeling_worker import ModelingWorker, ModelingWorkerSignals
 
-from OCC.Core.Quantity import Quantity_NOC_DARKOLIVEGREEN, Quantity_NOC_BLACK, Quantity_NOC_GREEN, Quantity_Color, Quantity_NOC_BROWN
+from OCC.Core.Quantity import Quantity_NOC_DARKOLIVEGREEN, Quantity_NOC_BLACK, Quantity_NOC_GREEN, Quantity_Color, Quantity_NOC_BROWN, Quantity_TOC_RGB 
 
 COLORS = ["RED", "BLUE", "GREEN", "ORANGE", Quantity_NOC_DARKOLIVEGREEN, "YELLOW", "CYAN"]
 
@@ -117,17 +118,7 @@ class MainWindow(QMainWindow):
     def update_status(self, message):
         self.statusBar().showMessage(message)
     
-    def display_model(self, s=None):
-        idx = 0
-        for wire in self._current_document.model.wires:
-            ais_context = self.display.GetContext()
-            drawer = ais_context.DefaultDrawer()
-            drawer.LineAspect().SetWidth(10.0)
-            self.display.DisplayShape(wire, color=COLORS[idx % len(COLORS)])
-            idx += 1
-        
-        # Display gunwale pipe on both sides (starboard and port)
-        pipe = self._current_document.model._gunwale.pipe
+    def display_stringer(self, pipe, color: Quantity_Color):
         shape = AIS_Shape(pipe)
         drawer = shape.Attributes()
 
@@ -141,29 +132,41 @@ class MainWindow(QMainWindow):
             2.0 # Thickness
         )
         drawer.SetFaceBoundaryAspect(line_aspect)
-        drawer.SetColor(Quantity_Color(Quantity_NOC_BROWN))
+        drawer.SetColor(color)
         self.display.Context.Display(shape, False)
-        mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-        self.display.DisplayShape(mirrored_pipe, color="GREEN")
+    
+    def _get_stringer_color(self, member):
+        return Quantity_Color(*[c / 256.0 for c in self._current_document.stringer_properties[member].color], Quantity_TOC_RGB)
+
+    def display_model(self, s=None):
+        idx = 0
+        for wire in self._current_document.model.wires:
+            ais_context = self.display.GetContext()
+            drawer = ais_context.DefaultDrawer()
+            drawer.LineAspect().SetWidth(10.0)
+            self.display.DisplayShape(wire, color=COLORS[idx % len(COLORS)])
+            idx += 1
+        
+        # Display gunwale pipe on both sides (starboard and port)
+        self.display_stringer(self._current_document.model._gunwale.pipe, self._get_stringer_color(GUNWALE))
+        self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model._gunwale.pipe), self._get_stringer_color(GUNWALE))
         
         # Display chine pipes on both sides (starboard and port)
-        for chine in self._current_document.model._chines:
-            pipe = chine.pipe
-            self.display.DisplayShape(pipe, color="RED")
-            mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-            self.display.DisplayShape(mirrored_pipe, color="RED")
+        for idx, c in enumerate(self._current_document.model._chines):
+            self.display_stringer(c.pipe, self._get_stringer_color(chine(idx)))
+            self.display_stringer(mirror_shape_across_yz_plane(c.pipe), self._get_stringer_color(chine(idx)))
         
         # Display keel pipe on both sides (starboard and port)
         pipe = self._current_document.model._keel.pipe
-        self.display.DisplayShape(pipe, color="BLUE")
+        self.display_stringer(pipe, self._get_stringer_color(KEEL))
         mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-        self.display.DisplayShape(mirrored_pipe, color="BLUE")
+        self.display_stringer(mirrored_pipe, self._get_stringer_color(KEEL))
 
         # Display deckridge pipe on both sides (starboard and port)
         pipe = self._current_document.model._deckridge.pipe
-        self.display.DisplayShape(pipe, color="YELLOW")
+        self.display_stringer(pipe, self._get_stringer_color(DECKRIDGE))
         mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-        self.display.DisplayShape(mirrored_pipe, color="YELLOW")
+        self.display_stringer(mirrored_pipe, self._get_stringer_color(DECKRIDGE))
 
     def on_profile_shape_changed(self):
         """Handle profile shape change - remodel and redraw if a document is loaded"""

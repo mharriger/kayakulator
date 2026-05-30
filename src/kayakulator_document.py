@@ -3,36 +3,29 @@
 A kayak being processed by the kayakulator.
 
 """
-
-from OCC.Core.gp import gp_Pln
-
 from offsets.offset_table import OffsetTable
+from modeling.fuselage_frame_kayak_model import FuselageFrameKayakModelBuilder, FuselageFrameKayakModel
+from modeling.geom_functions import make_profile_shape
+from stringer_properties import ProfileShape, StringerProperties
 from offsets.member import Member
-from modeling.kayak_model import KayakModel
-from modeling.profile_shape_config import ProfileShapeConfig
 
 class KayakulatorDocument:
-    name: str | None
-    offsets: OffsetTable # Original offsets as measured or provided by designer
-    frame_locations: list[float]  # distance of the frame from the nominal bow location
-    member_planes: dict[Member, gp_Pln]  # TODO: Either create base class for planes, or use a plane object from OCC
-    member_curves: dict[Member, any]  # TODO: Either create base class for curves, or use a curve object from OCC
-    profile_shape_config: ProfileShapeConfig  # Configuration for profile shapes applied to different members
-
     def __init__(self, name: str | None = None):
         self.name: str = name
         self.offsets: OffsetTable = None
-        self.profile_shape_config: ProfileShapeConfig = ProfileShapeConfig()
+        self.default_profile_shape: ProfileShape = None
+        self.stringer_properties: dict[Member, StringerProperties] = {}
         self.frame_locations:list[float] = []
-        self.model: KayakModel = None
+        self.model: FuselageFrameKayakModel = None
     
     def model_kayak(self, status_callback=None):
         """
         Model the kayak based on the offset table
         """
-        if OffsetTable.chine_count == 0 or OffsetTable.station_count == 0:
+        if self.offsets.chine_count == 0 or self.offsets.station_count == 0:
             raise RuntimeError('No offset data')
-        self.model = KayakModel(self.offsets, progress_callback=status_callback, profile_shape_config=self.profile_shape_config)
+        self.stringer_properties = {member: StringerProperties(profile_shape=self.default_profile_shape) for member in self.offsets.members}
+        self.model = FuselageFrameKayakModelBuilder().set_offsets(self.offsets).set_default_profile_shape(make_profile_shape(self.default_profile_shape)).model
 
     def save_to_file(self, filename: str):
         raise NotImplementedError("Saving to file is not implemented yet")

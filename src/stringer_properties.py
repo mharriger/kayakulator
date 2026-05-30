@@ -23,5 +23,8 @@ ProfileShape = ProfileRectangle | ProfileCircle
 class StringerProperties:
     profile_shape: ProfileShape
     color: tuple[int, int, int] =  (150, 111, 51)  # Default to a generic wood-like color
+    # Stores the Z values of the endpoints, since those are not fully defined by the offset table
+    bow_endpoint_z: float | None = None
+    stern_endpoint_z: float | None = None
 
 
