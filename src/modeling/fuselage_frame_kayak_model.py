@@ -32,6 +32,17 @@ class FuselageFrameKayakModel:
             self._keel.wires + \
             [c.wires for c in self._chines]
     
+    @property
+    def members(self):
+        dict = {}
+        dict[GUNWALE] = self._keel
+        dict[GUNWALE] = self._gunwale
+        dict[DECKRIDGE] = self._deckridge
+        for (idx, c) in enumerate(self._chines):
+            dict[chine(idx)] = c
+        return dict
+
+    
 class FuselageFrameKayakModelBuilder(KayakModelBuilder):
     def __init__(self):
         self._model = FuselageFrameKayakModel()

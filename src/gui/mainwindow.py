@@ -1,27 +1,26 @@
 from PySide6.QtWidgets import(
      QHBoxLayout,
-     QLayout,
      QLabel,
      QMainWindow,
-     QRadioButton,
      QToolBar,
      QFileDialog,
      QErrorMessage,
      QStyle,
      QVBoxLayout,
-     QWidget,
-     QLineEdit
+     QWidget
 )
 from PySide6.QtGui import (
     QAction,
-    QIcon,
     QKeySequence
 )
 
 from PySide6.QtCore import QThreadPool, QSize
+from typing import Optional
 
-from modeling.geom_functions import make_rectangle_face, make_circle_face, mirror_shape_across_yz_plane
-from stringer_properties import ProfileShape, ProfileCircle, ProfileRectangle
+from modeling.geom_functions import make_profile_shape, mirror_shape_across_yz_plane
+from gui.document_tree_widget import DocumentTreeWidget
+from gui.properties_view import PropertiesView
+from gui.properties_controller import PropertiesController
 from offsets.member import KEEL, GUNWALE, chine, DECKRIDGE
 
 from .modeling_worker import ModelingWorker, ModelingWorkerSignals
@@ -48,7 +47,7 @@ class MainWindow(QMainWindow):
         self._current_document = None
         self._threadpool = QThreadPool()
 
-        self.setWindowTitle("My App")
+        self.setWindowTitle("Kayakulator")
         self.canvas = qtDisplay.qtViewer3d(self)
 
         # Add the toolbar
@@ -89,6 +88,9 @@ class MainWindow(QMainWindow):
         self.display.set_bg_gradient_color([64, 64, 64], [211, 211, 211])
         self.display.display_triedron()
 
+        #Register a callback for shape selection
+        self.display.register_select_callback(self.on_select_shapes)
+
     def open_clicked(self, s):
         fileName = QFileDialog.getOpenFileName(self,
             caption="Open Offset File",
@@ -101,10 +103,12 @@ class MainWindow(QMainWindow):
         offsets = load_offset_file(fileName[0])
         self._current_document = KayakulatorDocument()
         self._current_document.offsets = offsets
-        self._current_document.default_profile_shape = self.optionsPanel.create_profile_shape_config()
         print(self._current_document.offsets.format_table())
         self._current_document.name = get_metadata(fileName[0])['name']
         print(f"Loaded kayak: {self._current_document.name}")
+        self.optionsPanel.treeWidget.set_document(self._current_document)
+        # Initialize the properties controller
+        self.optionsPanel.set_document(self._current_document)
         worker = ModelingWorker(self._current_document)
         worker.signals.finished.connect(self.display_model)
         worker.signals.error.connect(self.notify_error)
@@ -114,11 +118,12 @@ class MainWindow(QMainWindow):
     def notify_error(self, message):
         msg = QErrorMessage(self)
         msg.showMessage(message)
+        self.optionsPanel.treeWidget.refresh()
 
     def update_status(self, message):
         self.statusBar().showMessage(message)
     
-    def display_stringer(self, pipe, color: Quantity_Color):
+    def display_stringer(self, pipe, color: Quantity_Color) -> AIS_Shape:
         shape = AIS_Shape(pipe)
         drawer = shape.Attributes()
 
@@ -133,10 +138,16 @@ class MainWindow(QMainWindow):
         )
         drawer.SetFaceBoundaryAspect(line_aspect)
         drawer.SetColor(color)
-        self.display.Context.Display(shape, False)
+        self.display.Context.Display(shape, True)
+        return shape
     
     def _get_stringer_color(self, member):
         return Quantity_Color(*[c / 256.0 for c in self._current_document.stringer_properties[member].color], Quantity_TOC_RGB)
+
+    def on_select_shapes(self, selected_shapes, x_pos, y_pos):
+        print(f"Display click at ({x_pos}, {y_pos})")
+        for shape in selected_shapes:
+            print(f"Selected shape: {shape}")
 
     def display_model(self, s=None):
         idx = 0
@@ -148,136 +159,88 @@ class MainWindow(QMainWindow):
             idx += 1
         
         # Display gunwale pipe on both sides (starboard and port)
-        self.display_stringer(self._current_document.model._gunwale.pipe, self._get_stringer_color(GUNWALE))
-        self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model._gunwale.pipe), self._get_stringer_color(GUNWALE))
+        self._current_document.member_shapes[GUNWALE] = [self.display_stringer(self._current_document.model._gunwale.pipe, self._get_stringer_color(GUNWALE))]
+        self._current_document.member_shapes[GUNWALE].append(self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model._gunwale.pipe), self._get_stringer_color(GUNWALE)))
         
         # Display chine pipes on both sides (starboard and port)
         for idx, c in enumerate(self._current_document.model._chines):
-            self.display_stringer(c.pipe, self._get_stringer_color(chine(idx)))
-            self.display_stringer(mirror_shape_across_yz_plane(c.pipe), self._get_stringer_color(chine(idx)))
+            self._current_document.member_shapes[chine(idx)] = [self.display_stringer(c.pipe, self._get_stringer_color(chine(idx)))]
+            self._current_document.member_shapes[chine(idx)].append(self.display_stringer(mirror_shape_across_yz_plane(c.pipe), self._get_stringer_color(chine(idx))))
         
         # Display keel pipe on both sides (starboard and port)
         pipe = self._current_document.model._keel.pipe
-        self.display_stringer(pipe, self._get_stringer_color(KEEL))
+        self._current_document.member_shapes[KEEL] = [self.display_stringer(pipe, self._get_stringer_color(KEEL))]
         mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-        self.display_stringer(mirrored_pipe, self._get_stringer_color(KEEL))
+        self._current_document.member_shapes[KEEL].append(self.display_stringer(mirrored_pipe, self._get_stringer_color(KEEL)))
 
         # Display deckridge pipe on both sides (starboard and port)
         pipe = self._current_document.model._deckridge.pipe
-        self.display_stringer(pipe, self._get_stringer_color(DECKRIDGE))
+        self._current_document.member_shapes[DECKRIDGE] = [self.display_stringer(pipe, self._get_stringer_color(DECKRIDGE))]
         mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-        self.display_stringer(mirrored_pipe, self._get_stringer_color(DECKRIDGE))
+        self._current_document.member_shapes[DECKRIDGE].append(self.display_stringer(mirrored_pipe, self._get_stringer_color(DECKRIDGE)))
 
-    def on_profile_shape_changed(self):
-        """Handle profile shape change - remodel and redraw if a document is loaded"""
+    def on_properties_changed(self, member = None):
+        """Handle property changes"""
         if self._current_document is not None and self._current_document.offsets is not None:
-            self.display.EraseAll()
-            self._current_document.default_profile_shape = self.optionsPanel.create_profile_shape_config()
-            worker = ModelingWorker(self._current_document)
-            worker.signals.finished.connect(self.display_model)
-            worker.signals.error.connect(self.notify_error)
-            worker.signals.status.connect(self.update_status)
-            self._threadpool.start(worker)
+            # Changing the profile shape does not require remodeling, only need to redisplay the pipes
+            if member and member in self._current_document.model.members:
+                self._current_document.model.members[member].profile_shape = make_profile_shape(self._current_document.stringer_properties[member].profile_shape)
+            # TODO: Only remove/redraw the affected stringer(s) instead of everything
+            for shape in self._current_document.member_shapes.get(member, []):
+                self.display.Context.Remove(shape, False)
+            self._current_document.member_shapes[member] = [self.display_stringer(self._current_document.model.members[member].pipe, self._get_stringer_color(member))]
+            self._current_document.member_shapes[member].append(self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model.members[member].pipe), self._get_stringer_color(member)))
 
 class OptionsPanel(QWidget):
+    """Left panel containing tree view and properties."""
+    
     def __init__(self, parent):
         super().__init__(parent)
         self._parent = parent
         layout = QVBoxLayout()
         self.setLayout(layout)
-        shapeRadioLayout = QVBoxLayout()
-        shapeRadioLayout.addWidget(QLabel("Profile Shape"))
-        self.circleRadio = QRadioButton("Circle")
-        self.circleRadio.setChecked(True)
-        shapeRadioLayout.addWidget(self.circleRadio)
-        self.radiusLabel = QLabel("Radius (mm)")
-        self.radiusInput = QLineEdit("12.7")
-        shapeRadioLayout.addWidget(self.radiusLabel)
-        shapeRadioLayout.addWidget(self.radiusInput)
-        self.rectangleRadio = QRadioButton("Rectangle")
-        self.widthLabel = QLabel("Width (mm)")
-        self.widthInput = QLineEdit("25.4")
-        self.heightLabel = QLabel("Height (mm)")
-        self.heightInput = QLineEdit("12.7")
-        self.showHideProfileParameters()
-        shapeRadioLayout.addWidget(self.rectangleRadio)
-        shapeRadioLayout.addWidget(self.widthLabel)
-        shapeRadioLayout.addWidget(self.widthInput)
-        shapeRadioLayout.addWidget(self.heightLabel)
-        shapeRadioLayout.addWidget(self.heightInput)
-
-        self.radiusLabel.setMaximumWidth(100)
-        self.radiusInput.setMaximumWidth(50)
-        self.widthLabel.setMaximumWidth(100)
-        self.heightInput.setMaximumWidth(50)
-        self.heightLabel.setMaximumWidth(100)
-        self.widthInput.setMaximumWidth(50)
-
-        layout.addLayout(shapeRadioLayout)
+        
+        # Document tree widget
+        self.treeWidget = DocumentTreeWidget()
+        layout.addWidget(self.treeWidget)
+        
+        # Properties view
+        self.propertiesView = PropertiesView()
+        layout.addWidget(QLabel("Properties"))
+        layout.addWidget(self.propertiesView)
+        
         layout.addStretch()
-        shapeRadioLayout.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
-        layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
-
+        
         self.setSizePolicy(
             qtDisplay.QtWidgets.QSizePolicy.Policy.Maximum,
             qtDisplay.QtWidgets.QSizePolicy.Policy.MinimumExpanding
         )
-        self.circleRadio.toggled.connect(self.profileShapechanged)
-        self.rectangleRadio.toggled.connect(self.profileShapechanged)
-
-    def showHideProfileParameters(self):
-        if self.circleRadio.isChecked():
-            self.radiusLabel.show()
-            self.radiusInput.show()
-            self.widthLabel.hide()
-            self.widthInput.hide()
-            self.heightLabel.hide()
-            self.heightInput.hide()
-        elif self.rectangleRadio.isChecked():
-            self.radiusLabel.hide()
-            self.radiusInput.hide()
-            self.widthLabel.show()
-            self.widthInput.show()
-            self.heightLabel.show()
-            self.heightInput.show()
-
+        
+        # Properties controller will be connected when document is loaded
+        self._properties_controller: Optional[PropertiesController] = None
+    
     def sizeHint(self):
-        return QSize(150, 150)
+        return QSize(300, 400)
     
-    def _create_single_shape(self):
-        """Create a single profile shape based on current settings."""
-        if self.circleRadio.isChecked():
-            return make_circle_face(radius=float(self.radiusInput.text()) / 2)
-        else:
-            return make_rectangle_face(
-                width=float(self.widthInput.text()), 
-                height=float(self.heightInput.text())
-            )
+    def set_document(self, document: KayakulatorDocument):
+        """Set the document and initialize properties controller."""
+        # Create properties controller
+        tree_view = self.treeWidget.tree_view
+        self._properties_controller = PropertiesController(
+            tree_view,
+            self.propertiesView,
+            document,
+            self
+        )
+        
+        # Connect properties updates to remodeling
+        self._properties_controller.properties_updated.connect(
+            lambda member: self._parent.on_properties_changed(member)
+        )
     
-    def create_profile_shape_config(self) -> ProfileShape:
-        """Create the profile shape configuration based on current settings."""
-        if self.circleRadio.isChecked():
-            return ProfileCircle(radius=float(self.radiusInput.text()) / 2)
-        else:
-            return ProfileRectangle(
-                width=float(self.widthInput.text()),
-                height=float(self.heightInput.text())
-            )
-    
-    def get_profile_shape(self) -> str:
-        """Get the currently selected profile shape."""
-        self.showHideProfileParameters()
-        if self.circleRadio.isChecked():
-            return "circle"
-        elif self.rectangleRadio.isChecked():
-            return "rectangle"
-        return "circle"  # Default to circle
-    
-    def profileShapechanged(self):
-        profile = self.get_profile_shape()
-        print(f"{profile.capitalize()} profile selected")
-        # Trigger remodeling if a document is loaded
-        self._parent.on_profile_shape_changed()
+    def connect_mapper_to_tree_view(self, document):
+        """For backwards compatibility - this now delegates to set_document."""
+        self.set_document(document)
 
 
 class MainToolbar(QToolBar):

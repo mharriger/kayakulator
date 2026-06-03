@@ -19,14 +19,22 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
     - Document (root)
       - Stringers
         - Gunwale
+            - Offsets
+            - Curve
+            - Solid
         - Keel
+            - Offsets
+            - Curve
+            - Solid
         - Deckridge
+            - Offsets
+            - Curve
+            - Solid
         - Chine (if only one) or Chines (if multiple)
           - Chine 0, Chine 1, etc.
-      - Offsets
-        - Offset 0 (station 0)
-        - Offset 1 (station 1)
-        - etc.
+            - Offsets
+            - Curve
+            - Solid
     """
     
     def __init__(self, document: KayakulatorDocument):
@@ -43,7 +51,7 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
     def _build_tree(self):
         """Build the tree structure from the document."""
         # Create and set root item
-        root_item = QStandardItem("Document")
+        root_item = QStandardItem(self.document.name if self.document.name else "Untitled Kayak")
         self.setItem(0, 0, root_item)
         
         # Create Stringers node
@@ -54,14 +62,17 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
         gunwale_item = QStandardItem("Gunwale")
         self._apply_member_properties(gunwale_item, GUNWALE)
         stringers_item.appendRow(gunwale_item)
+        self._addStringerSubitems(gunwale_item, GUNWALE)
         
         keel_item = QStandardItem("Keel")
         self._apply_member_properties(keel_item, KEEL)
         stringers_item.appendRow(keel_item)
+        self._addStringerSubitems(keel_item, KEEL)
         
         deckridge_item = QStandardItem("Deckridge")
         self._apply_member_properties(deckridge_item, DECKRIDGE)
         stringers_item.appendRow(deckridge_item)
+        self._addStringerSubitems(deckridge_item, DECKRIDGE)
         
         # Add chines
         if self.document.offsets:
@@ -71,6 +82,7 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
                 chine_item = QStandardItem("Chine")
                 self._apply_member_properties(chine_item, chine(0))
                 stringers_item.appendRow(chine_item)
+                self._addStringerSubitems(chine_item, chine(0))
             elif chine_count > 1:
                 # Multiple chines - create Chines group
                 chines_item = QStandardItem("Chines")
@@ -79,22 +91,29 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
                     chine_item = QStandardItem(f"Chine {i}")
                     self._apply_member_properties(chine_item, chine(i))
                     chines_item.appendRow(chine_item)
-        
-        # Create Offsets node
-        offsets_item = QStandardItem("Offsets")
-        root_item.appendRow(offsets_item)
-        
-        # Add offset items for each station
-        if self.document.offsets:
-            station_locations = self.document.offsets.station_locations
-            for station_idx in sorted(station_locations.keys()):
-                location = station_locations[station_idx]
-                if location is not None:
-                    offset_item = QStandardItem(f"Station {station_idx} (x={location})")
-                else:
-                    offset_item = QStandardItem(f"Station {station_idx}")
-                offsets_item.appendRow(offset_item)
+                    self._addStringerSubitems(chine_item, chine(i))
     
+    def _addStringerSubitems(self, parent_item: QStandardItem, member: Member):
+        """
+        Add subitems for a stringer member (gunwale, keel, deckridge, chine).
+        
+        Subitems include:
+        - Offsets: List of offset points for the member
+        - Curve: Placeholder for the curve representation
+        - Solid: Placeholder for the solid representation
+        """
+        # Offsets subitem
+        offsets_item = QStandardItem("Offsets")
+        parent_item.appendRow(offsets_item)
+           
+        # Curve subitem (placeholder)
+        curve_item = QStandardItem("Curve")
+        parent_item.appendRow(curve_item)
+        
+        # Solid subitem (placeholder)
+        solid_item = QStandardItem("Solid")
+        parent_item.appendRow(solid_item)
+
     def _apply_member_properties(self, item: QStandardItem, member: Member):
         """
         Apply properties from the document's stringer_properties to a tree item.

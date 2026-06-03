@@ -36,6 +36,15 @@ class StringerModel(ABC):
         pass
 
     @property
+    def profile_shape(self) -> TopoDS_Shape:
+        return self._profile_shape
+    
+    @profile_shape.setter
+    def profile_shape(self, value: TopoDS_Shape):
+        self._profile_shape = value
+        self._pipe = None # Invalidate the pipe so it will be regenerated with the new
+
+    @property
     def pipe(self) -> TopoDS_Shape:
         """
         A solid representing the 3D shape of the actual stringer.
