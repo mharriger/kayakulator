@@ -18,7 +18,7 @@ class KayakulatorDocument:
         self.stringer_properties: dict[Member, StringerProperties] = {}
         self.frame_locations:list[float] = []
         self.model: FuselageFrameKayakModel = None
-        self.member_shapes: dict[Member, AIS_Shape] = {}
+        self.member_shapes: dict[Member, dict[str, list[AIS_Shape]]] = {}
     
     def model_kayak(self, status_callback=None):
         """

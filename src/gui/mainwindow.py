@@ -14,7 +14,7 @@ from PySide6.QtGui import (
     QKeySequence
 )
 
-from PySide6.QtCore import QThreadPool, QSize
+from PySide6.QtCore import QThreadPool, QSize, Qt
 from typing import Optional
 
 from modeling.geom_functions import make_profile_shape, mirror_shape_across_yz_plane
@@ -149,6 +149,27 @@ class MainWindow(QMainWindow):
         for shape in selected_shapes:
             print(f"Selected shape: {shape}")
 
+    def _set_shapes_visibility(self, member, category, visible: bool):
+        if self._current_document is None:
+            return
+        shapes = self._current_document.member_shapes.get(member, {}).get(category, [])
+        for shape in shapes:
+            if visible:
+                self.display.Context.Display(shape, True)
+            else:
+                self.display.Context.Remove(shape, False)
+
+    def on_tree_visibility_changed(self, member, category, state):
+        state = Qt.CheckState(state)
+        visible = state == Qt.Checked
+        if member is None:
+            return
+        if category is None:
+            for cat in ["offsets", "curve", "solid"]:
+                self._set_shapes_visibility(member, cat, visible)
+        else:
+            self._set_shapes_visibility(member, category, visible)
+
     def display_model(self, s=None):
         idx = 0
         for wire in self._current_document.model.wires:
@@ -159,25 +180,50 @@ class MainWindow(QMainWindow):
             idx += 1
         
         # Display gunwale pipe on both sides (starboard and port)
-        self._current_document.member_shapes[GUNWALE] = [self.display_stringer(self._current_document.model._gunwale.pipe, self._get_stringer_color(GUNWALE))]
-        self._current_document.member_shapes[GUNWALE].append(self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model._gunwale.pipe), self._get_stringer_color(GUNWALE)))
+        self._current_document.member_shapes[GUNWALE] = {
+            "solid": [self.display_stringer(self._current_document.model._gunwale.pipe, self._get_stringer_color(GUNWALE))]
+        }
+        self._current_document.member_shapes[GUNWALE]["solid"].append(
+            self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model._gunwale.pipe), self._get_stringer_color(GUNWALE))
+        )
+        self._current_document.member_shapes[GUNWALE]["offsets"] = []
+        self._current_document.member_shapes[GUNWALE]["curve"] = []
         
         # Display chine pipes on both sides (starboard and port)
         for idx, c in enumerate(self._current_document.model._chines):
-            self._current_document.member_shapes[chine(idx)] = [self.display_stringer(c.pipe, self._get_stringer_color(chine(idx)))]
-            self._current_document.member_shapes[chine(idx)].append(self.display_stringer(mirror_shape_across_yz_plane(c.pipe), self._get_stringer_color(chine(idx))))
+            member = chine(idx)
+            self._current_document.member_shapes[member] = {
+                "solid": [self.display_stringer(c.pipe, self._get_stringer_color(member))],
+                "offsets": [],
+                "curve": []
+            }
+            self._current_document.member_shapes[member]["solid"].append(
+                self.display_stringer(mirror_shape_across_yz_plane(c.pipe), self._get_stringer_color(member))
+            )
         
         # Display keel pipe on both sides (starboard and port)
         pipe = self._current_document.model._keel.pipe
-        self._current_document.member_shapes[KEEL] = [self.display_stringer(pipe, self._get_stringer_color(KEEL))]
+        self._current_document.member_shapes[KEEL] = {
+            "solid": [self.display_stringer(pipe, self._get_stringer_color(KEEL))],
+            "offsets": [],
+            "curve": []
+        }
         mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-        self._current_document.member_shapes[KEEL].append(self.display_stringer(mirrored_pipe, self._get_stringer_color(KEEL)))
+        self._current_document.member_shapes[KEEL]["solid"].append(
+            self.display_stringer(mirrored_pipe, self._get_stringer_color(KEEL))
+        )
 
         # Display deckridge pipe on both sides (starboard and port)
         pipe = self._current_document.model._deckridge.pipe
-        self._current_document.member_shapes[DECKRIDGE] = [self.display_stringer(pipe, self._get_stringer_color(DECKRIDGE))]
+        self._current_document.member_shapes[DECKRIDGE] = {
+            "solid": [self.display_stringer(pipe, self._get_stringer_color(DECKRIDGE))],
+            "offsets": [],
+            "curve": []
+        }
         mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-        self._current_document.member_shapes[DECKRIDGE].append(self.display_stringer(mirrored_pipe, self._get_stringer_color(DECKRIDGE)))
+        self._current_document.member_shapes[DECKRIDGE]["solid"].append(
+            self.display_stringer(mirrored_pipe, self._get_stringer_color(DECKRIDGE))
+        )
 
     def on_properties_changed(self, member = None):
         """Handle property changes"""
@@ -186,10 +232,14 @@ class MainWindow(QMainWindow):
             if member and member in self._current_document.model.members:
                 self._current_document.model.members[member].profile_shape = make_profile_shape(self._current_document.stringer_properties[member].profile_shape)
             # TODO: Only remove/redraw the affected stringer(s) instead of everything
-            for shape in self._current_document.member_shapes.get(member, []):
+            for shape in self._current_document.member_shapes.get(member, {}).get("solid", []):
                 self.display.Context.Remove(shape, False)
-            self._current_document.member_shapes[member] = [self.display_stringer(self._current_document.model.members[member].pipe, self._get_stringer_color(member))]
-            self._current_document.member_shapes[member].append(self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model.members[member].pipe), self._get_stringer_color(member)))
+            self._current_document.member_shapes.setdefault(member, {})["solid"] = [
+                self.display_stringer(self._current_document.model.members[member].pipe, self._get_stringer_color(member))
+            ]
+            self._current_document.member_shapes[member]["solid"].append(
+                self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model.members[member].pipe), self._get_stringer_color(member))
+            )
 
 class OptionsPanel(QWidget):
     """Left panel containing tree view and properties."""
@@ -237,6 +287,13 @@ class OptionsPanel(QWidget):
         self._properties_controller.properties_updated.connect(
             lambda member: self._parent.on_properties_changed(member)
         )
+        
+        # Connect tree visibility controls to the main window
+        try:
+            self.treeWidget.visibility_changed.disconnect(self._parent.on_tree_visibility_changed)
+        except (TypeError, RuntimeError):
+            pass
+        self.treeWidget.visibility_changed.connect(self._parent.on_tree_visibility_changed)
     
     def connect_mapper_to_tree_view(self, document):
         """For backwards compatibility - this now delegates to set_document."""

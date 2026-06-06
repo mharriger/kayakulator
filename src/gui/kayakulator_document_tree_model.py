@@ -6,7 +6,7 @@ associated components, suitable for display in a PySide6 QTreeView.
 """
 
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from kayakulator_document import KayakulatorDocument
 from offsets.member import GUNWALE, KEEL, DECKRIDGE, chine, Member
 
@@ -36,7 +36,10 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
             - Curve
             - Solid
     """
-    
+
+    visibility_changed = Signal(object, object, Qt.CheckState)
+    CATEGORY_ROLE = Qt.UserRole + 1
+
     def __init__(self, document: KayakulatorDocument):
         """
         Initialize the document tree model.
@@ -46,7 +49,10 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
         """
         super().__init__()
         self.document = document
+        self._visibility_state: dict[Member, dict[str, int]] = {}
+        self._is_updating = False
         self._build_tree()
+        self.itemChanged.connect(self._on_item_changed)
     
     def _build_tree(self):
         """Build the tree structure from the document."""
@@ -59,18 +65,15 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
         root_item.appendRow(stringers_item)
         
         # Add gunwale, keel, deckridge to stringers
-        gunwale_item = QStandardItem("Gunwale")
-        self._apply_member_properties(gunwale_item, GUNWALE)
+        gunwale_item = self._create_member_item("Gunwale", GUNWALE)
         stringers_item.appendRow(gunwale_item)
         self._addStringerSubitems(gunwale_item, GUNWALE)
         
-        keel_item = QStandardItem("Keel")
-        self._apply_member_properties(keel_item, KEEL)
+        keel_item = self._create_member_item("Keel", KEEL)
         stringers_item.appendRow(keel_item)
         self._addStringerSubitems(keel_item, KEEL)
         
-        deckridge_item = QStandardItem("Deckridge")
-        self._apply_member_properties(deckridge_item, DECKRIDGE)
+        deckridge_item = self._create_member_item("Deckridge", DECKRIDGE)
         stringers_item.appendRow(deckridge_item)
         self._addStringerSubitems(deckridge_item, DECKRIDGE)
         
@@ -79,8 +82,7 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
             chine_count = self.document.offsets.chine_count
             if chine_count == 1:
                 # Single chine - add directly to stringers
-                chine_item = QStandardItem("Chine")
-                self._apply_member_properties(chine_item, chine(0))
+                chine_item = self._create_member_item("Chine", chine(0))
                 stringers_item.appendRow(chine_item)
                 self._addStringerSubitems(chine_item, chine(0))
             elif chine_count > 1:
@@ -88,11 +90,33 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
                 chines_item = QStandardItem("Chines")
                 stringers_item.appendRow(chines_item)
                 for i in range(chine_count):
-                    chine_item = QStandardItem(f"Chine {i}")
-                    self._apply_member_properties(chine_item, chine(i))
+                    chine_item = self._create_member_item(f"Chine {i}", chine(i))
                     chines_item.appendRow(chine_item)
                     self._addStringerSubitems(chine_item, chine(i))
     
+    def _create_member_item(self, label: str, member: Member) -> QStandardItem:
+        item = QStandardItem(label)
+        item.setData(member, Qt.UserRole)
+        item.setCheckable(True)
+        item.setAutoTristate(True)
+        item.setCheckState(self._compute_member_check_state(member))
+        if member in self.document.stringer_properties:
+            props = self.document.stringer_properties[member]
+            color = QColor(*props.color)
+            item.setForeground(color)
+        return item
+
+    def _compute_member_check_state(self, member: Member) -> int:
+        state_map = self._visibility_state.get(member, {})
+        if not state_map:
+            return Qt.Checked
+        states = [state_map.get(category, Qt.Checked) for category in ["offsets", "curve", "solid"]]
+        if all(state == Qt.Checked for state in states):
+            return Qt.Checked
+        if all(state == Qt.Unchecked for state in states):
+            return Qt.Unchecked
+        return Qt.PartiallyChecked
+
     def _addStringerSubitems(self, parent_item: QStandardItem, member: Member):
         """
         Add subitems for a stringer member (gunwale, keel, deckridge, chine).
@@ -102,34 +126,71 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
         - Curve: Placeholder for the curve representation
         - Solid: Placeholder for the solid representation
         """
-        # Offsets subitem
-        offsets_item = QStandardItem("Offsets")
-        parent_item.appendRow(offsets_item)
-           
-        # Curve subitem (placeholder)
-        curve_item = QStandardItem("Curve")
-        parent_item.appendRow(curve_item)
-        
-        # Solid subitem (placeholder)
-        solid_item = QStandardItem("Solid")
-        parent_item.appendRow(solid_item)
+        parent_item.appendRow(self._create_category_item("Offsets", member, "offsets"))
+        parent_item.appendRow(self._create_category_item("Curve", member, "curve"))
+        parent_item.appendRow(self._create_category_item("Solid", member, "solid"))
 
-    def _apply_member_properties(self, item: QStandardItem, member: Member):
-        """
-        Apply properties from the document's stringer_properties to a tree item.
-        
-        Stores the Member reference and applies visual properties like color.
-        """
-        # Store the Member reference on the item for later retrieval
+    def _create_category_item(self, label: str, member: Member, category: str) -> QStandardItem:
+        item = QStandardItem(label)
         item.setData(member, Qt.UserRole)
-        
-        # Apply color if properties exist for this member
-        if member in self.document.stringer_properties:
-            props = self.document.stringer_properties[member]
-            # Create QColor from the RGB tuple
-            color = QColor(*props.color)
-            item.setForeground(color)
-    
+        item.setData(category, self.CATEGORY_ROLE)
+        item.setCheckable(True)
+        item.setCheckState(self._visibility_state.get(member, {}).get(category, Qt.Checked))
+        return item
+
+    def _on_item_changed(self, item: QStandardItem):
+        if self._is_updating:
+            return
+
+        member = item.data(Qt.UserRole)
+        category = item.data(self.CATEGORY_ROLE)
+
+        if not isinstance(member, Member):
+            return
+
+        self._is_updating = True
+        try:
+            if category is None:
+                self._apply_parent_state_to_children(item)
+                self._store_member_states(member, item.checkState())
+            else:
+                self._store_member_category_state(member, category, item.checkState())
+                self._update_parent_check_state(item.parent())
+        finally:
+            self._is_updating = False
+
+        self.visibility_changed.emit(member, category, item.checkState())
+
+    def _apply_parent_state_to_children(self, parent_item: QStandardItem):
+        state = parent_item.checkState()
+        for row in range(parent_item.rowCount()):
+            child = parent_item.child(row)
+            if child is not None:
+                child.setCheckState(state)
+
+    def _store_member_states(self, member: Member, state: int):
+        state_dict = self._visibility_state.setdefault(member, {})
+        for category in ["offsets", "curve", "solid"]:
+            state_dict[category] = state
+
+    def _store_member_category_state(self, member: Member, category: str, state: int):
+        self._visibility_state.setdefault(member, {})[category] = state
+
+    def _update_parent_check_state(self, parent_item: QStandardItem | None):
+        if parent_item is None:
+            return
+        member = parent_item.data(Qt.UserRole)
+        if not isinstance(member, Member):
+            return
+
+        child_states = [parent_item.child(row).checkState() for row in range(parent_item.rowCount())]
+        if all(state == Qt.Checked for state in child_states):
+            parent_item.setCheckState(Qt.Checked)
+        elif all(state == Qt.Unchecked for state in child_states):
+            parent_item.setCheckState(Qt.Unchecked)
+        else:
+            parent_item.setCheckState(Qt.PartiallyChecked)
+
     def get_member_from_item(self, item: QStandardItem) -> Member | None:
         """
         Retrieve the Member associated with a tree item.

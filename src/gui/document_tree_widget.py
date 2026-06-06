@@ -6,7 +6,7 @@ for hierarchical visualization of document structure, stringers, and offsets.
 """
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTreeView
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from kayakulator_document import KayakulatorDocument
 from .kayakulator_document_tree_model import KayakulatorDocumentTreeModel
 
@@ -18,6 +18,8 @@ class DocumentTreeWidget(QWidget):
     Displays the hierarchical structure of a document including stringers
     (gunwale, keel, deckridge, chines) and offset stations.
     """
+
+    visibility_changed = Signal(object, object, Qt.CheckState)
     
     def __init__(self, document: KayakulatorDocument | None = None, parent=None):
         """
@@ -46,6 +48,7 @@ class DocumentTreeWidget(QWidget):
         # Set model if document is provided
         if self.document is not None:
             self.tree_model = KayakulatorDocumentTreeModel(self.document)
+            self.tree_model.visibility_changed.connect(self.visibility_changed)
             self.tree_view.setModel(self.tree_model)
             self.tree_view.expandAll()
         
@@ -61,6 +64,7 @@ class DocumentTreeWidget(QWidget):
         """
         self.document = document
         self.tree_model = KayakulatorDocumentTreeModel(document)
+        self.tree_model.visibility_changed.connect(self.visibility_changed)
         self.tree_view.setModel(self.tree_model)
         self.tree_view.expandAll()
     
