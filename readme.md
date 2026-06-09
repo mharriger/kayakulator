@@ -1,12 +1,14 @@
-### Running ###
+### Introduction ###
 
-Execute ```python src/kayakulator.py``` in the project root folder. You may need to use ```python3 src/kayakulator.py``` on Linux.
+GUI application that takes a table of offsets for a Yost-style fuselage frame kayak and displays a 3D model of the keel, chines, gunwale and deckridge. Only works if the offsets for each stringer are relatively close to coplanar in 3D space.
 
-### Configuration ###
+Uses OpenCASCADE via Pythonocc for geometric modeling and 3D model display.
 
-Configuration is currently hardcoded in variables near the top of kayakulator.py.
+### Planned Features ###
 
-### Outputs ###
+* Modeling frames
+* Output full-size 2D templates for frames
+* Output full-size templates for tab-and-slot construction of an entire kayak frame from plywood
 
-1. SVG frame outlines in the output/frames folder
-2. A freecad document with a 3D model of the kayak, or at least all of the parts of the kayak where part generation has been implemented so far.
+### Dependencies ###
+Conda seems to be the easiest way to get a working pythonocc.
