@@ -1,3 +1,5 @@
+from enum import Enum
+
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Lin, gp_Dir, gp_Dir2d, gp_Pln, gp_Ax1, gp_Ax2, gp_Ax3, gp_Ax2d, gp_Circ, gp_Trsf
 from OCC.Core.Geom import Geom_Plane, Geom_Line
 from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf, GeomAPI_IntSS, GeomAPI_ProjectPointOnCurve
@@ -304,3 +306,14 @@ def mirror_shape_across_yz_plane(shape: TopoDS_Shape) -> TopoDS_Shape:
         raise RuntimeError("Mirror transformation failed.")
     
     return transformer.Shape()
+
+def get_line_midpoint2d(p1: gp_Pnt2d, p2: gp_Pnt2d):
+    mid_x = (p1.Coord[0] + p2.Coord[0]) / 2.0
+    mid_y = (p1.Coord[1] + p2.Coord[1]) / 2.0
+    return gp_Pnt(mid_x, mid_y)
+
+def get_dir_point_to_point2d(p1: gp_Pnt2d, p2: gp_Pnt2d) -> gp_Dir2d:
+    dx = p2.Coord()[0] - p1.Coord()[0]
+    dy = p2.Coord()[1] - p1.Coord()[1]
+
+    return gp_Dir2d(dx, dy)
