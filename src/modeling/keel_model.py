@@ -51,6 +51,12 @@ class KeelModel(StringerModel):
     def base_geometry(self):
         return self._geometry_list
 
+    def _get_trim_plane(self):
+        """
+        TODO: Trim the keel with the plane parallel to the top of the deckridge
+        """
+        return None
+
     @property
     def offsets2d(self):
         return [(y,z) for _,y,z in  tuple(self._offsets)]

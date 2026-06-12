@@ -4,7 +4,6 @@ Properties applied to a stringer in the kayak model. These are properties that c
 
 from dataclasses import dataclass
 from typing import Literal
-from OCC.Core.TopoDS import TopoDS_Shape
 
 @dataclass(frozen=True)
 class ProfileRectangle:

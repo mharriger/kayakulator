@@ -5,9 +5,9 @@ A kayak being processed by the kayakulator.
 """
 from offsets.offset_table import OffsetTable
 from modeling.fuselage_frame_kayak_model import FuselageFrameKayakModelBuilder, FuselageFrameKayakModel
-from modeling.geom_functions import make_profile_shape
+from modeling.geom_functions import make_profile_shape, x_position, y_position
 from stringer_properties import ProfileShape, StringerProperties, ProfileRectangle
-from offsets.member import Member
+from offsets.member import Member, GUNWALE, DECKRIDGE, KEEL
 from OCC.Core.AIS import AIS_Shape
 
 class KayakulatorDocument:
@@ -33,7 +33,13 @@ class KayakulatorDocument:
             if self.offsets.chine_count == 0 or self.offsets.station_count == 0:
                 raise RuntimeError('No offset data')
             self.stringer_properties = {member: StringerProperties(profile_shape=self.default_profile_shape) for member in self.offsets.members}
-            self.model = FuselageFrameKayakModelBuilder().set_offsets(self.offsets).set_default_profile_shape(make_profile_shape(self.default_profile_shape)).model
+            self.model = FuselageFrameKayakModelBuilder() \
+                .set_offsets(self.offsets) \
+                .set_default_profile_shape(make_profile_shape(self.default_profile_shape)) \
+                .set_stringer_profile(GUNWALE, make_profile_shape(self.default_profile_shape, origin_pos_y=y_position.TOP)) \
+                .set_stringer_profile(DECKRIDGE, make_profile_shape(self.default_profile_shape, origin_pos_x=x_position.LEFT, origin_pos_y=y_position.CENTER)) \
+                .set_stringer_profile(KEEL, make_profile_shape(self.default_profile_shape, origin_pos_x=x_position.RIGHT, origin_pos_y=y_position.CENTER)) \
+                .model
 
     def save_to_file(self, filename: str):
         raise NotImplementedError("Saving to file is not implemented yet")

@@ -35,7 +35,7 @@ class FuselageFrameKayakModel:
     @property
     def members(self):
         dict = {}
-        dict[GUNWALE] = self._keel
+        dict[KEEL] = self._keel
         dict[GUNWALE] = self._gunwale
         dict[DECKRIDGE] = self._deckridge
         for (idx, c) in enumerate(self._chines):

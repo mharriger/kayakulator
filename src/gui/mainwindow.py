@@ -26,6 +26,7 @@ from offsets.member import KEEL, GUNWALE, chine, DECKRIDGE
 from .modeling_worker import ModelingWorker, ModelingWorkerSignals
 
 from OCC.Core.Quantity import Quantity_NOC_DARKOLIVEGREEN, Quantity_NOC_BLACK, Quantity_NOC_GREEN, Quantity_Color, Quantity_NOC_BROWN, Quantity_TOC_RGB 
+from OCC.Core.gp import gp_Pnt
 
 COLORS = ["RED", "BLUE", "GREEN", "ORANGE", Quantity_NOC_DARKOLIVEGREEN, "YELLOW", "CYAN"]
 
@@ -123,6 +124,38 @@ class MainWindow(QMainWindow):
     def update_status(self, message):
         self.statusBar().showMessage(message)
     
+    def make_compound_if_needed(self, shape_or_list):
+        if isinstance(shape_or_list, list):
+            if len(shape_or_list) > 1:
+                # If it's a list of edges, create a compound shape
+                from OCC.Core.BRep import BRep_Builder
+                from OCC.Core.TopoDS import TopoDS_Compound
+                compound = TopoDS_Compound()
+                builder = BRep_Builder()
+                builder.MakeCompound(compound)
+                for e in shape_or_list:
+                    builder.Add(compound, e)
+                return compound
+            elif len(shape_or_list) == 1:
+                return shape_or_list[0]
+            else:
+                raise ValueError("Empty list provided where shape expected")
+        else:
+            return shape_or_list
+
+    def display_wire(self, edge, color: Quantity_Color) -> AIS_Shape:
+        shape = AIS_Shape(self.make_compound_if_needed(edge))
+        drawer = shape.Attributes()
+        line_aspect = Prs3d_LineAspect(
+            color, # Color (or use Quantity_NOC_RED, Quantity_NOC_WHITE etc.)
+            Aspect_TOL_SOLID,   # Line type
+            20.0               # Line thickness
+        )
+        drawer.SetLineAspect(line_aspect)
+        drawer.SetColor(color)
+        self.display.Context.Display(shape, True)
+        return shape
+
     def display_stringer(self, pipe, color: Quantity_Color) -> AIS_Shape:
         shape = AIS_Shape(pipe)
         drawer = shape.Attributes()
@@ -137,6 +170,14 @@ class MainWindow(QMainWindow):
             2.0 # Thickness
         )
         drawer.SetFaceBoundaryAspect(line_aspect)
+        drawer.SetColor(color)
+        self.display.Context.Display(shape, True)
+        return shape
+    
+    def display_offset(self, point, color: Quantity_Color) -> AIS_Shape:
+        from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+        shape = AIS_Shape(BRepBuilderAPI_MakeVertex(gp_Pnt(*point)).Vertex())
+        drawer = shape.Attributes()
         drawer.SetColor(color)
         self.display.Context.Display(shape, True)
         return shape
@@ -157,7 +198,7 @@ class MainWindow(QMainWindow):
             if visible:
                 self.display.Context.Display(shape, True)
             else:
-                self.display.Context.Remove(shape, False)
+                self.display.Context.Erase(shape, True)
 
     def on_tree_visibility_changed(self, member, category, state):
         state = Qt.CheckState(state)
@@ -171,59 +212,20 @@ class MainWindow(QMainWindow):
             self._set_shapes_visibility(member, category, visible)
 
     def display_model(self, s=None):
-        idx = 0
-        for wire in self._current_document.model.wires:
-            ais_context = self.display.GetContext()
-            drawer = ais_context.DefaultDrawer()
-            drawer.LineAspect().SetWidth(10.0)
-            self.display.DisplayShape(wire, color=COLORS[idx % len(COLORS)])
-            idx += 1
         
-        # Display gunwale pipe on both sides (starboard and port)
-        self._current_document.member_shapes[GUNWALE] = {
-            "solid": [self.display_stringer(self._current_document.model._gunwale.pipe, self._get_stringer_color(GUNWALE))]
-        }
-        self._current_document.member_shapes[GUNWALE]["solid"].append(
-            self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model._gunwale.pipe), self._get_stringer_color(GUNWALE))
-        )
-        self._current_document.member_shapes[GUNWALE]["offsets"] = []
-        self._current_document.member_shapes[GUNWALE]["curve"] = []
-        
-        # Display chine pipes on both sides (starboard and port)
-        for idx, c in enumerate(self._current_document.model._chines):
-            member = chine(idx)
-            self._current_document.member_shapes[member] = {
-                "solid": [self.display_stringer(c.pipe, self._get_stringer_color(member))],
-                "offsets": [],
-                "curve": []
+        for (memberKey, memberObject) in self._current_document.model.members.items():
+            self._current_document.member_shapes[memberKey] = {
+                "solid": [
+                    self.display_stringer(self._current_document.model.members[memberKey].pipe, self._get_stringer_color(memberKey)),
+                    None if memberKey in (KEEL, DECKRIDGE) else self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model.members[memberKey].pipe), self._get_stringer_color(memberKey))
+                ],
+                "curve": [
+                            self.display_wire(self._current_document.model.members[memberKey].wires, self._get_stringer_color(memberKey)),
+                            None if memberKey in (KEEL, DECKRIDGE) else self.display_wire(mirror_shape_across_yz_plane(self.make_compound_if_needed(self._current_document.model.members[memberKey].wires)), self._get_stringer_color(memberKey))
+                          ],
+                "offsets": [self.display_offset(o, self._get_stringer_color(memberKey)) for o in self._current_document.offsets.get_member_coordinates(memberKey, ['x', 'y', 'z'])]
             }
-            self._current_document.member_shapes[member]["solid"].append(
-                self.display_stringer(mirror_shape_across_yz_plane(c.pipe), self._get_stringer_color(member))
-            )
-        
-        # Display keel pipe on both sides (starboard and port)
-        pipe = self._current_document.model._keel.pipe
-        self._current_document.member_shapes[KEEL] = {
-            "solid": [self.display_stringer(pipe, self._get_stringer_color(KEEL))],
-            "offsets": [],
-            "curve": []
-        }
-        mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-        self._current_document.member_shapes[KEEL]["solid"].append(
-            self.display_stringer(mirrored_pipe, self._get_stringer_color(KEEL))
-        )
 
-        # Display deckridge pipe on both sides (starboard and port)
-        pipe = self._current_document.model._deckridge.pipe
-        self._current_document.member_shapes[DECKRIDGE] = {
-            "solid": [self.display_stringer(pipe, self._get_stringer_color(DECKRIDGE))],
-            "offsets": [],
-            "curve": []
-        }
-        mirrored_pipe = mirror_shape_across_yz_plane(pipe)
-        self._current_document.member_shapes[DECKRIDGE]["solid"].append(
-            self.display_stringer(mirrored_pipe, self._get_stringer_color(DECKRIDGE))
-        )
 
     def on_properties_changed(self, member = None):
         """Handle property changes"""

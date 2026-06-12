@@ -8,7 +8,7 @@ from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakePipe
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse
 from OCC.Core.TopTools import TopTools_ListOfShape
 
-from .geom_functions import segment_polyline_near_straight, trim_shape_with_plane, place_shape_by_ax2, YZ_PLANE
+from .geom_functions import segment_polyline_near_straight
 
 from modeling.stringer_model import StringerModel
 
@@ -33,6 +33,12 @@ class DeckridgeModel(StringerModel):
     @property
     def base_geometry(self):
         return self._geometry_list
+
+    def _get_trim_plane(self):
+        """
+        Don't trim the deckridge with a plane
+        """
+        return None
 
     @property
     def wires(self) -> list[TopoDS_Wire]:

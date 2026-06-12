@@ -18,6 +18,16 @@ from stringer_properties import ProfileShape
 
 YZ_PLANE = gp_Pln(gp_Pnt(0,0,0), gp_Dir())
 
+class y_position(Enum):
+    TOP = 1
+    CENTER = 2
+    BOTTOM = 3
+
+class x_position(Enum):
+    LEFT = 1
+    CENTER = 2
+    RIGHT = 3
+
 def intersect_plane_z_axis(plane) -> gp_Ax1:
     """Create a coordinate system for the plane with the origin at (0,0,z) where z is the plane's height on the Z axis."""
     z_line = gp_Lin(gp_Ax1())
@@ -191,11 +201,11 @@ def trimCurveWithCurve(curveToTrim, otherCurve):
         # More than two intersections
         raise ValueError(f"Curve intersection resulted in {num_intersections} points. Expected 0, 1, or 2.")
 
-def make_profile_shape(shapeSpecs: ProfileShape) -> TopoDS_Face:
+def make_profile_shape(shapeSpecs: ProfileShape, origin_pos_x: x_position = x_position.RIGHT, origin_pos_y: y_position = y_position.CENTER) -> TopoDS_Face:
     if shapeSpecs.shape_type == "circle":
         return make_circle_face(shapeSpecs.radius)
     elif shapeSpecs.shape_type == "rectangle":
-        return make_rectangle_face(shapeSpecs.width, shapeSpecs.height)
+        return make_rectangle_face(shapeSpecs.width, shapeSpecs.height, origin_pos_x, origin_pos_y)
     else:
         raise ValueError(f"Unknown profile shape type: {shapeSpecs.shape_type}")
 
@@ -214,18 +224,32 @@ def make_circle_face(radius: float) -> TopoDS_Face:
     wire = BRepBuilderAPI_MakeWire(edge).Wire()
     return BRepBuilderAPI_MakeFace(wire).Face()
 
-def make_rectangle_face(width: float, height: float) -> TopoDS_Face:
+def make_rectangle_face(width: float, height: float, origin_pos_x: x_position = x_position.RIGHT, origin_pos_y: y_position = y_position.CENTER) -> TopoDS_Face:
     """
-    Creates a rectangular profile face where the center of the right side 
-    is perfectly aligned with the target_axes position and orientation.
+    Creates a rectangular profile face aligned according to the specified origin positions.
     """
-    # 1. Compute local 2D bounds relative to the right-center point at (0,0)
-    # The right edge is at X=0, so the left edge is at X=-width
-    # The vertical center is at Y=0, so Y bounds go from -height/2 to +height/2
-    x_min = -width
-    x_max = 0.0
-    y_min = -height / 2.0
-    y_max = height / 2.0
+    if origin_pos_x == x_position.CENTER:
+        x_min = -width / 2.0
+        x_max = width / 2.0
+    elif origin_pos_x == x_position.RIGHT:
+        x_min = -width
+        x_max = 0.0
+    elif origin_pos_x == x_position.LEFT:
+        x_min = 0.0
+        x_max = width
+    else:
+        raise ValueError(f"Invalid x_position: {origin_pos_x}")
+    if origin_pos_y == y_position.CENTER:
+        y_min = -height / 2.0
+        y_max = height / 2.0
+    elif origin_pos_y == y_position.TOP:
+        y_min = 0.0
+        y_max = height
+    elif origin_pos_y == y_position.BOTTOM:
+        y_min = -height
+        y_max = 0.0
+    else:
+        raise ValueError(f"Invalid y_position: {origin_pos_y}")
     
     # 2. Create a flat XY face using local parametric bounds
     local_axes = gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1))
@@ -247,10 +271,9 @@ def construct_perpendicular_in_plane(plane: gp_Pln, line: gp_Lin, point: gp_Pnt)
     
     return perp_line
 
-def place_shape_by_ax2(shape: TopoDS_Shape, ax2: gp_Ax2, plane: gp_Pln) -> TopoDS_Face:
+def place_shape_by_ax2(shape: TopoDS_Shape, ax2: gp_Ax2) -> TopoDS_Face:
     """
-    Transform a TopoDS_Shape to align it with the given axis and position, and
-    calculate the normal of the curve at that point to orient the profile correctly in 3D space.
+    Transform a TopoDS_Shape to align it with the given axis and position
     """
     trsf = gp_Trsf()
     # Maps standard global axes (0,0,0) to your custom target coordinate system

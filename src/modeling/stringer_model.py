@@ -44,6 +44,12 @@ class StringerModel(ABC):
         self._profile_shape = value
         self._pipe = None # Invalidate the pipe so it will be regenerated with the new
 
+    def _get_trim_plane(self):
+        """
+        Return the plane this stringer should be trimmed with. By default it is the YZ plane
+        """
+        return YZ_PLANE
+
     @property
     def pipe(self) -> TopoDS_Shape:
         """
@@ -74,12 +80,13 @@ class StringerModel(ABC):
             # The curve normal at the endpoint is perpendicular to the tangent in the stringer plane
             perp = construct_perpendicular_in_plane(self._surface, gp_Lin(pos.Axis()), loc)
             pos.SetXDirection(perp.Direction().Reversed())
-            profile = place_shape_by_ax2(self._profile_shape, pos, self._surface)
+            profile = place_shape_by_ax2(self._profile_shape, pos)
 
             pipe_maker = BRepOffsetAPI_MakePipe(w.Wire(), profile)
             pipe_maker.Build()
             pipe = pipe_maker.Shape()
-            trimmed = trim_shape_with_plane(pipe, YZ_PLANE, gp_Pnt(-1,0,0))
+            # Trim with the YZ plane, unless the surface is parallel to the YZ plane
+            trimmed = trim_shape_with_plane(pipe, self._get_trim_plane(), gp_Pnt(-1,0,0)) if self._get_trim_plane() else pipe
             pipes.Append(trimmed)
         if len(pipes) == 1:
             return pipes.First()
