@@ -229,16 +229,16 @@ class MainWindow(QMainWindow):
         """Handle property changes"""
         if self._current_document is not None and self._current_document.offsets is not None:
             # Changing the profile shape does not require remodeling, only need to redisplay the pipes
-            if member and member in self._current_document.model.members:
-                self._current_document.model.members[member].profile_shape = make_profile_shape(self._current_document.stringer_properties[member].profile_shape)
+            if member and member in self._current_document.model.stringers:
+                self._current_document.model.stringers[member].profile_shape = make_profile_shape(self._current_document.stringer_properties[member].profile_shape)
             # TODO: Only remove/redraw the affected stringer(s) instead of everything
             for shape in self._current_document.member_shapes.get(member, {}).get("solid", []):
                 self.display.Context.Remove(shape, False)
             self._current_document.member_shapes.setdefault(member, {})["solid"] = [
-                self.display_stringer(self._current_document.model.members[member].pipe, self._get_stringer_color(member))
+                self.display_stringer(self._current_document.model.stringers[member].pipe, self._get_stringer_color(member))
             ]
             self._current_document.member_shapes[member]["solid"].append(
-                self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model.members[member].pipe), self._get_stringer_color(member))
+                self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model.stringers[member].pipe), self._get_stringer_color(member))
             )
 
 class OptionsPanel(QWidget):

@@ -3,6 +3,7 @@ from typing import Self
 from collections import defaultdict
 
 from modeling.kayak_model_builder import KayakModelBuilder
+from modeling.stringer_model import StringerModel
 from modeling.chine_model import ChineModel
 from modeling.keel_model import KeelModel
 from modeling.deckridge_model import DeckridgeModel
@@ -33,7 +34,7 @@ class FuselageFrameKayakModel:
             [c.wires for c in self._chines]
     
     @property
-    def members(self):
+    def stringers(self) -> dict[Member: StringerModel]:
         dict = {}
         dict[GUNWALE] = self._keel
         dict[GUNWALE] = self._gunwale
@@ -45,7 +46,7 @@ class FuselageFrameKayakModel:
     
 class FuselageFrameKayakModelBuilder(KayakModelBuilder):
     def __init__(self):
-        self._model = FuselageFrameKayakModel()
+        self._model: FuselageFrameKayakModel = FuselageFrameKayakModel()
         self._offset_table = None
         self._default_profile_shape: TopoDS_Shape = None
         self._stringer_profiles = defaultdict(self._get_default_profile_shape)
