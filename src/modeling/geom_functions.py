@@ -9,7 +9,7 @@ from OCC.Core.IntAna import IntAna_IntConicQuad
 from OCC.Core.GCE2d import GCE2d_MakeSegment
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform, BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
 from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
-from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut
+from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Section
 from OCC.Extend.TopologyUtils import TopologyExplorer
 from OCC.Core.GC import GC_MakeCircle
 from OCC.Core.TopoDS import TopoDS_Face, TopoDS_Shape
@@ -317,3 +317,13 @@ def get_dir_point_to_point2d(p1: gp_Pnt2d, p2: gp_Pnt2d) -> gp_Dir2d:
     dy = p2.Coord()[1] - p1.Coord()[1]
 
     return gp_Dir2d(dx, dy)
+
+def intersect_shape_with_plane(shape: TopoDS_Shape, plane: gp_Pln) -> TopoDS_Shape:
+    """
+    Intersect a TopoDS_Shape with a plane
+    """
+    plane_face = BRepBuilderAPI_MakeFace(plane).Shape()
+    section = BRepAlgoAPI_Section(shape, plane_face)
+    section.Build()
+    if section.IsDone():
+        return section.Shape()

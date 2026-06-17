@@ -1,18 +1,19 @@
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from OCC.Core.gp import gp_Dir, gp_Pnt, gp_Ax2, gp_Lin
+from OCC.Core.gp import gp_Dir, gp_Pnt, gp_Ax2, gp_Lin, gp_Pln, gp_Pnt2d
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
-from OCC.Core.TopoDS import TopoDS_Wire
+from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Shape, topods
 from OCC.Core.GeomAPI import geomapi
 from OCC.Extend.TopologyUtils import TopologyExplorer
 from OCC.Core.GeomLProp import GeomLProp_CLProps
 from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakePipe
-from OCC.Core.TopoDS import TopoDS_Shape
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse
+from OCC.Core.BRep import BRep_Tool
+from OCC.Core.TopAbs import TopAbs_VERTEX
 from OCC.Core.TopTools import TopTools_ListOfShape
 
-from .geom_functions import trimCurveWithCurve, place_shape_by_ax2, trim_shape_with_plane, construct_perpendicular_in_plane, YZ_PLANE
+from .geom_functions import trimCurveWithCurve, place_shape_by_ax2, trim_shape_with_plane, construct_perpendicular_in_plane, YZ_PLANE, intersect_shape_with_plane
 
 class StringerModel(ABC):
     """
@@ -106,3 +107,22 @@ class StringerModel(ABC):
             topo = TopologyExplorer(edge)
             v1, v2 = topo.vertices()
         return [w.Wire()]
+    
+    def get_x_y_at_z(self, z: float):
+        """
+        Get the x,y coordinate of the stringer at a specific z coordinate.
+        Return None if the stringer does not exist at the coordinate (e.g. z is beyond
+        bow or stern, or requesting a deckridge coordinate where the cockpit is)
+
+        Raise an exception if the stringer has more than one x,y coordinate for a given z.
+        """
+        coord = None
+        plane = gp_Pln(gp_Pnt(0,0,z), gp_Dir(0,0,1))
+        for wire in self.wires:
+            isect = intersect_shape_with_plane(wire, plane)
+            if not isect.ShapeType() == TopAbs_VERTEX:
+                raise "Intersection shape is not a vertex"
+            vertex = topods.Vertex(isect)
+            pt = BRep_Tool.Pnt(vertex)
+        return gp_Pnt2d(*pt.Coord())
+            

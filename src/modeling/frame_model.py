@@ -7,18 +7,20 @@ and the chine and gunwale, there is a smooth concave curve to prevent the skin f
 against the frame when pressed inward by water pressure.
 """
 
-from offsets.member import Member, GUNWALE, KEEL, DECKRIDGE, chine
+from offsets.member import MemberType, Member, GUNWALE, KEEL, DECKRIDGE, chine, frame
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Lin2d, gp_Vec2d
 from OCC.Core.GCE2d import GCE2d_MakeArcOfCircle
-from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire, TopoDS_Solid, TopoDS_Wire, TopoDS_Edge
+from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
+from OCC.Core.TopoDS import TopoDS_Solid, TopoDS_Wire, TopoDS_Edge
 from dataclasses import dataclass, field
-from geom_functions import get_line_midpoint2d, get_dir_point_to_point2d, mirror_shape_across_yz_plane
+from .geom_functions import get_line_midpoint2d, get_dir_point_to_point2d, mirror_shape_across_yz_plane
+import settings_manager
 
 @dataclass(frozen=True)
 class LineSegment2d:
     start: gp_Pnt2d
     end: gp_Pnt2d
-    edge = field(init=False)
+    edge: TopoDS_Edge = field(init=False)
 
     def __post_init__(self):
         object.__setattr__(self, 'edge', BRepBuilderAPI_MakeEdge(self.start, self.end).Edge())
@@ -99,6 +101,12 @@ class FrameModel:
 class FrameModelBuilder:
     def __init__(self):
         self._model = FrameModel()
+        # Initialize these to the default settings
+        settings = settings_manager.settings
+        self._model.skin_relief_depth = settings.get(MemberType.FRAME, "skin_relief_depth")
+        self._model.frame_thickness = settings.get(MemberType.FRAME, "frame_thickness")
+        self._model.frame_width = settings.get(MemberType.FRAME, "frame_width")
+        self._model.interior_fillet_radius = settings.get(MemberType.FRAME, "interior_fillet_radius")
 
     def set_exterior_segments(self, segments: list[LineSegment2d]):
         self._model._exterior_segments = segments
