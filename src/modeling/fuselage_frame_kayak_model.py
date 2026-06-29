@@ -15,6 +15,7 @@ from OCC.Core.TopoDS import TopoDS_Shape
 from OCC.Core.gp import gp_Pln, gp_Pnt, gp_Dir, gp_Lin
 
 
+
 class FuselageFrameKayakModel:
     def __init__(self):
         self._chines = []
@@ -52,7 +53,7 @@ class FuselageFrameKayakModel:
     @property
     def members(self) -> dict[Member: object]:
         dict = {}
-        dict[GUNWALE] = self._keel
+        dict[KEEL] = self._keel
         dict[GUNWALE] = self._gunwale
         dict[DECKRIDGE] = self._deckridge
         for (idx, c) in enumerate(self._chines):

@@ -13,6 +13,7 @@ from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Section
 from OCC.Extend.TopologyUtils import TopologyExplorer
 from OCC.Core.GC import GC_MakeCircle
 from OCC.Core.TopoDS import TopoDS_Face, TopoDS_Shape
+from enum import Enum
 
 import skspatial.objects as skso
 
