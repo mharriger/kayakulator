@@ -3,17 +3,20 @@ from typing import Iterable
 
 from OCC.Core.gp import gp_Dir, gp_Pnt, gp_Ax2, gp_Lin, gp_Pln, gp_Pnt2d
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
-from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Shape, topods
+from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Shape, topods, TopoDS_Iterator
+from OCC.Core.Geom import Geom_Curve
 from OCC.Core.GeomAPI import geomapi
+from OCC.Core.IntAna import IntAna_QuadQuadGeo, IntAna_Line
 from OCC.Extend.TopologyUtils import TopologyExplorer
 from OCC.Core.GeomLProp import GeomLProp_CLProps
 from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakePipe
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse
 from OCC.Core.BRep import BRep_Tool
+from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
 from OCC.Core.TopAbs import TopAbs_VERTEX
 from OCC.Core.TopTools import TopTools_ListOfShape
 
-from .geom_functions import trimCurveWithCurve, place_shape_by_ax2, trim_shape_with_plane, construct_perpendicular_in_plane, YZ_PLANE, intersect_shape_with_plane
+from .geom_functions import trimCurveWithCurve, place_shape_by_ax2, trim_shape_with_plane, construct_perpendicular_in_plane, YZ_PLANE, intersect_curve_with_plane
 
 class StringerModel(ABC):
     """
@@ -108,7 +111,7 @@ class StringerModel(ABC):
             v1, v2 = topo.vertices()
         return [w.Wire()]
     
-    def get_x_y_at_z(self, z: float):
+    def get_x_z_at_y(self, y: float):
         """
         Get the x,y coordinate of the stringer at a specific z coordinate.
         Return None if the stringer does not exist at the coordinate (e.g. z is beyond
@@ -117,12 +120,22 @@ class StringerModel(ABC):
         Raise an exception if the stringer has more than one x,y coordinate for a given z.
         """
         coord = None
-        plane = gp_Pln(gp_Pnt(0,0,z), gp_Dir(0,0,1))
-        for wire in self.wires:
-            isect = intersect_shape_with_plane(wire, plane)
-            if not isect.ShapeType() == TopAbs_VERTEX:
-                raise "Intersection shape is not a vertex"
-            vertex = topods.Vertex(isect)
-            pt = BRep_Tool.Pnt(vertex)
-        return gp_Pnt2d(*pt.Coord())
-            
+        plane = gp_Pln(gp_Pnt(0,y,0), gp_Dir(0,1,0))
+        for geom in self.base_geometry:
+            curve = geomapi.To3d(geom, self._surface)
+            isect = intersect_curve_with_plane(curve, plane)
+            if isect is not None:
+                return isect
+        return None #Does not intersect
+        
+    def intersect_surface_with_plane(self, plane: gp_Pln) -> gp_Lin:
+        """
+        Return the curve resulting from the intersection of this stringer's surface with a plane
+        """
+        if type(self._surface) != gp_Pln:
+            raise NotImplementedError("Intersecting a non-planar surface is not implemented")
+        intana = IntAna_QuadQuadGeo(self._surface, plane, 1e-6, 1e-6)
+        if intana.IsDone() and intana.NbSolutions() == 1 and intana.TypeInter() == IntAna_Line:
+            return intana.Line(1)
+        else:
+            raise RuntimeError("Intersection did not produce a single curve")

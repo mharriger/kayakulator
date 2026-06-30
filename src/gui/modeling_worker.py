@@ -24,7 +24,6 @@ class ModelingWorker(QRunnable):
 
 class ModelingWorkerSignals(QObject):
     """Defines the signals available from a running worker thread."""
-    # No signals for now, but could add progress updates or something later
     finished = Signal()
     error = Signal(str)
     status = Signal(str)

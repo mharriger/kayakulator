@@ -7,7 +7,8 @@ from PySide6.QtWidgets import(
      QErrorMessage,
      QStyle,
      QVBoxLayout,
-     QWidget
+     QWidget,
+     QStatusBar
 )
 from PySide6.QtGui import (
     QAction,
@@ -91,6 +92,8 @@ class MainWindow(QMainWindow):
         #Register a callback for shape selection
         self.display.register_select_callback(self.on_select_shapes)
 
+        self.setStatusBar(QStatusBar(self))
+
     def open_clicked(self, s):
         fileName = QFileDialog.getOpenFileName(self,
             caption="Open Offset File",
@@ -121,6 +124,7 @@ class MainWindow(QMainWindow):
         self.optionsPanel.treeWidget.refresh()
 
     def update_status(self, message):
+        print(f"Setting status bar message: {message}")
         self.statusBar().showMessage(message)
     
     def display_stringer(self, pipe, color: Quantity_Color) -> AIS_Shape:
@@ -144,6 +148,20 @@ class MainWindow(QMainWindow):
     def _get_stringer_color(self, member):
         return Quantity_Color(*[c / 256.0 for c in self._current_document.stringer_properties[member].color], Quantity_TOC_RGB)
 
+    def display_frame(self, wire, color: Quantity_Color) -> AIS_Shape:
+        shape = AIS_Shape(wire)
+        drawer = shape.Attributes()
+
+        line_aspect = Prs3d_LineAspect(
+            color, 
+            Aspect_TOL_SOLID, 
+            10.0 # Thickness
+        )
+
+        drawer.SetLineAspect(line_aspect)
+        self.display.Context.Display(shape, True)
+        return shape
+    
     def on_select_shapes(self, selected_shapes, x_pos, y_pos):
         print(f"Display click at ({x_pos}, {y_pos})")
         for shape in selected_shapes:
@@ -224,6 +242,12 @@ class MainWindow(QMainWindow):
         self._current_document.member_shapes[DECKRIDGE]["solid"].append(
             self.display_stringer(mirrored_pipe, self._get_stringer_color(DECKRIDGE))
         )
+        for member, frame in self._current_document.model._frames.items():
+            self._current_document.member_shapes[member] = {
+            "solid": [],
+            "offsets": [],
+            "curve": [self.display_frame(frame._exterior_wire, Quantity_Color(Quantity_NOC_BLACK))]
+        }
 
     def on_properties_changed(self, member = None):
         """Handle property changes"""

@@ -33,7 +33,13 @@ class KayakulatorDocument:
             if self.offsets.chine_count == 0 or self.offsets.station_count == 0:
                 raise RuntimeError('No offset data')
             self.stringer_properties = {member: StringerProperties(profile_shape=self.default_profile_shape) for member in self.offsets.members}
-            self.model = FuselageFrameKayakModelBuilder().set_offsets(self.offsets).set_default_profile_shape(make_profile_shape(self.default_profile_shape)).model
+            builder = FuselageFrameKayakModelBuilder() \
+                .set_offsets(self.offsets) \
+                .set_default_profile_shape(make_profile_shape(self.default_profile_shape)) \
+                .setProgressCallback(status_callback)
+            for fpos in self.offsets.station_locations.values():
+                builder.add_frame_position(fpos)
+            self.model = builder.model
 
     def save_to_file(self, filename: str):
         raise NotImplementedError("Saving to file is not implemented yet")
