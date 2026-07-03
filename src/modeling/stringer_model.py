@@ -1,18 +1,22 @@
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from OCC.Core.gp import gp_Dir, gp_Pnt, gp_Ax2, gp_Lin
+from OCC.Core.gp import gp_Dir, gp_Pnt, gp_Ax2, gp_Lin, gp_Pln, gp_Pnt2d
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
-from OCC.Core.TopoDS import TopoDS_Wire
+from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Shape, topods, TopoDS_Iterator
+from OCC.Core.Geom import Geom_Curve
 from OCC.Core.GeomAPI import geomapi
+from OCC.Core.IntAna import IntAna_QuadQuadGeo, IntAna_Line
 from OCC.Extend.TopologyUtils import TopologyExplorer
 from OCC.Core.GeomLProp import GeomLProp_CLProps
 from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakePipe
-from OCC.Core.TopoDS import TopoDS_Shape
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse
+from OCC.Core.BRep import BRep_Tool
+from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
+from OCC.Core.TopAbs import TopAbs_VERTEX
 from OCC.Core.TopTools import TopTools_ListOfShape
 
-from .geom_functions import trimCurveWithCurve, place_shape_by_ax2, trim_shape_with_plane, construct_perpendicular_in_plane, YZ_PLANE
+from .geom_functions import trimCurveWithCurve, place_shape_by_ax2, trim_shape_with_plane, construct_perpendicular_in_plane, YZ_PLANE, intersect_curve_with_plane
 
 class StringerModel(ABC):
     """
@@ -113,3 +117,32 @@ class StringerModel(ABC):
             topo = TopologyExplorer(edge)
             v1, v2 = topo.vertices()
         return [w.Wire()]
+    
+    def get_x_z_at_y(self, y: float):
+        """
+        Get the x,y coordinate of the stringer at a specific z coordinate.
+        Return None if the stringer does not exist at the coordinate (e.g. z is beyond
+        bow or stern, or requesting a deckridge coordinate where the cockpit is)
+
+        Raise an exception if the stringer has more than one x,y coordinate for a given z.
+        """
+        coord = None
+        plane = gp_Pln(gp_Pnt(0,y,0), gp_Dir(0,1,0))
+        for geom in self.base_geometry:
+            curve = geomapi.To3d(geom, self._surface)
+            isect = intersect_curve_with_plane(curve, plane)
+            if isect is not None:
+                return isect
+        return None #Does not intersect
+        
+    def intersect_surface_with_plane(self, plane: gp_Pln) -> gp_Lin:
+        """
+        Return the curve resulting from the intersection of this stringer's surface with a plane
+        """
+        if type(self._surface) != gp_Pln:
+            raise NotImplementedError("Intersecting a non-planar surface is not implemented")
+        intana = IntAna_QuadQuadGeo(self._surface, plane, 1e-6, 1e-6)
+        if intana.IsDone() and intana.NbSolutions() == 1 and intana.TypeInter() == IntAna_Line:
+            return intana.Line(1)
+        else:
+            raise RuntimeError("Intersection did not produce a single curve")

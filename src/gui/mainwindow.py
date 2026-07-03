@@ -7,7 +7,8 @@ from PySide6.QtWidgets import(
      QErrorMessage,
      QStyle,
      QVBoxLayout,
-     QWidget
+     QWidget,
+     QStatusBar
 )
 from PySide6.QtGui import (
     QAction,
@@ -21,7 +22,7 @@ from modeling.geom_functions import make_profile_shape, mirror_shape_across_yz_p
 from gui.document_tree_widget import DocumentTreeWidget
 from gui.properties_view import PropertiesView
 from gui.properties_controller import PropertiesController
-from offsets.member import KEEL, GUNWALE, chine, DECKRIDGE
+from offsets.member import KEEL, GUNWALE, chine, DECKRIDGE, MemberType
 
 from .modeling_worker import ModelingWorker, ModelingWorkerSignals
 
@@ -92,6 +93,8 @@ class MainWindow(QMainWindow):
         #Register a callback for shape selection
         self.display.register_select_callback(self.on_select_shapes)
 
+        self.setStatusBar(QStatusBar(self))
+
     def open_clicked(self, s):
         fileName = QFileDialog.getOpenFileName(self,
             caption="Open Offset File",
@@ -122,6 +125,7 @@ class MainWindow(QMainWindow):
         self.optionsPanel.treeWidget.refresh()
 
     def update_status(self, message):
+        print(f"Setting status bar message: {message}")
         self.statusBar().showMessage(message)
     
     def make_compound_if_needed(self, shape_or_list):
@@ -185,6 +189,20 @@ class MainWindow(QMainWindow):
     def _get_stringer_color(self, member):
         return Quantity_Color(*[c / 256.0 for c in self._current_document.stringer_properties[member].color], Quantity_TOC_RGB)
 
+    def display_frame(self, wire, color: Quantity_Color) -> AIS_Shape:
+        shape = AIS_Shape(wire)
+        drawer = shape.Attributes()
+
+        line_aspect = Prs3d_LineAspect(
+            color, 
+            Aspect_TOL_SOLID, 
+            10.0 # Thickness
+        )
+
+        drawer.SetLineAspect(line_aspect)
+        self.display.Context.Display(shape, True)
+        return shape
+    
     def on_select_shapes(self, selected_shapes, x_pos, y_pos):
         print(f"Display click at ({x_pos}, {y_pos})")
         for shape in selected_shapes:
@@ -216,14 +234,14 @@ class MainWindow(QMainWindow):
         for (memberKey, memberObject) in self._current_document.model.members.items():
             self._current_document.member_shapes[memberKey] = {
                 "solid": [
-                    self.display_stringer(self._current_document.model.members[memberKey].pipe, self._get_stringer_color(memberKey)),
-                    None if memberKey in (KEEL, DECKRIDGE) else self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model.members[memberKey].pipe), self._get_stringer_color(memberKey))
+                    None if memberKey.type == MemberType.FRAME else self.display_stringer(memberObject.pipe, self._get_stringer_color(memberKey)),
+                    None if memberKey.type in (MemberType.KEEL, MemberType.DECKRIDGE, MemberType.FRAME) else self.display_stringer(mirror_shape_across_yz_plane(memberObject.pipe), self._get_stringer_color(memberKey))
                 ],
                 "curve": [
-                            self.display_wire(self._current_document.model.members[memberKey].wires, self._get_stringer_color(memberKey)),
-                            None if memberKey in (KEEL, DECKRIDGE) else self.display_wire(mirror_shape_across_yz_plane(self.make_compound_if_needed(self._current_document.model.members[memberKey].wires)), self._get_stringer_color(memberKey))
+                            self.display_frame(memberObject._exterior_wire, Quantity_Color(Quantity_NOC_BLACK)) if memberKey.type == MemberType.FRAME else self.display_wire(memberObject.wires, self._get_stringer_color(memberKey)),
+                            None if memberKey.type in (MemberType.KEEL, MemberType.DECKRIDGE, MemberType.FRAME) else self.display_wire(mirror_shape_across_yz_plane(self.make_compound_if_needed(self._current_document.model.members[memberKey].wires)), self._get_stringer_color(memberKey))
                           ],
-                "offsets": [self.display_offset(o, self._get_stringer_color(memberKey)) for o in self._current_document.offsets.get_member_coordinates(memberKey, ['x', 'y', 'z'])]
+                "offsets": [None if memberKey.type == MemberType.FRAME else self.display_offset(o, self._get_stringer_color(memberKey)) for o in self._current_document.offsets.get_member_coordinates(memberKey, ['x', 'y', 'z'])]
             }
 
 

@@ -1,16 +1,19 @@
+from enum import Enum
+
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Lin, gp_Dir, gp_Dir2d, gp_Pln, gp_Ax1, gp_Ax2, gp_Ax3, gp_Ax2d, gp_Circ, gp_Trsf
-from OCC.Core.Geom import Geom_Plane, Geom_Line
-from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf, GeomAPI_IntSS, GeomAPI_ProjectPointOnCurve
+from OCC.Core.Geom import Geom_Plane, Geom_Line, Geom_Curve
+from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf, GeomAPI_IntSS, GeomAPI_IntCS, GeomAPI_ProjectPointOnCurve
 from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve, Geom2dAPI_ProjectPointOnCurve
 from OCC.Core.Geom2d import Geom2d_Circle, Geom2d_Line, Geom2d_TrimmedCurve
 from OCC.Core.IntAna import IntAna_IntConicQuad
 from OCC.Core.GCE2d import GCE2d_MakeSegment
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform, BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
 from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
-from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut
+from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Section
 from OCC.Extend.TopologyUtils import TopologyExplorer
 from OCC.Core.GC import GC_MakeCircle
 from OCC.Core.TopoDS import TopoDS_Face, TopoDS_Shape
+from enum import Enum
 
 import skspatial.objects as skso
 
@@ -327,3 +330,52 @@ def mirror_shape_across_yz_plane(shape: TopoDS_Shape) -> TopoDS_Shape:
         raise RuntimeError("Mirror transformation failed.")
     
     return transformer.Shape()
+
+def get_line_midpoint(p1: gp_Pnt, p2: gp_Pnt):
+    mid_x = (p1.Coord()[0] + p2.Coord()[0]) / 2.0
+    mid_y = (p1.Coord()[1] + p2.Coord()[1]) / 2.0
+    mid_z = (p1.Coord()[2] + p2.Coord()[2]) / 2.0
+    return gp_Pnt(mid_x, mid_y, mid_z)
+
+def get_dir_point_to_point(p1: gp_Pnt, p2: gp_Pnt) -> gp_Dir:
+    dx = p2.Coord()[0] - p1.Coord()[0]
+    dy = p2.Coord()[1] - p1.Coord()[1]
+    dz = p2.Coord()[2] - p1.Coord()[2]
+
+    return gp_Dir(dx, dy, dz)
+
+def intersect_shape_with_plane(shape: TopoDS_Shape, plane: gp_Pln) -> TopoDS_Shape:
+    """
+    Intersect a TopoDS_Shape with a plane
+    Returns None if the shape does not intersect the plane
+    """
+    plane_face = BRepBuilderAPI_MakeFace(plane).Shape()
+    section = BRepAlgoAPI_Section(shape, plane_face)
+    section.Build()
+    if section.IsDone():
+        if section.Shape().NbChildren() == 0:
+            return None
+        return section.Shape()
+
+def intersect_curve_with_plane(curve: Geom_Curve, plane: gp_Pln) -> gp_Pnt:
+    """
+    Intersect a single curve with a plane, resulting in a point
+    """
+    geomPlane = Geom_Plane(plane)
+    isect = GeomAPI_IntCS(curve, geomPlane)
+    if isect.IsDone() and isect.NbPoints() == 1:
+        return isect.Point(1)
+    return None
+
+def centroid(pnts: list[gp_Pnt]) -> gp_Pnt:
+    """
+    Calculate the centroid of a set of points
+    """    
+    total_x = sum(pnt.X() for pnt in pnts)
+    total_y = sum(pnt.Y() for pnt in pnts)
+    total_z = sum(pnt.Z() for pnt in pnts)
+    num_points = len(pnts)
+    
+    return gp_Pnt(total_x / num_points, total_y / num_points, total_z / num_points)
+
+    

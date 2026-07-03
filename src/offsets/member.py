@@ -12,7 +12,9 @@ class MemberType(Enum):
     CHINE = "chine"
     GUNWALE = "gunwale"
     DECKRIDGE = "deckridge"
+    FRAME = "frame"
 
+MULTI_MEMBER_TYPES = [MemberType.CHINE, MemberType.FRAME]
 
 @dataclass(frozen=True)
 class Member:
@@ -20,20 +22,22 @@ class Member:
     index: int | None = None
 
     def __post_init__(self):
-        if self.type == MemberType.CHINE and self.index is None:
-            raise ValueError("Chine must have an index")
-        if self.type != MemberType.CHINE and self.index is not None:
-            raise ValueError("Only chine can have an index")
+        if self.type in MULTI_MEMBER_TYPES and self.index is None:
+            raise ValueError(f"{self.type.value} must have an index")
+        if self.type not in MULTI_MEMBER_TYPES and self.index is not None:
+            raise ValueError(f"{self.type.value} cannot have an index")
 
     def __repr__(self):
-        if self.type == MemberType.CHINE:
-            return f"{self.type.value}{self.index}"
-        return self.type.value
+        if self.type in MULTI_MEMBER_TYPES:
+            return f"{self.membertype.value}{self.index}"
+        return self.membertype.value
     
 # Convenience constructors
 def chine(i: int) -> Member:
     return Member(MemberType.CHINE, i)
 
+def frame(i: int) -> Member:
+    return Member(MemberType.FRAME, i)
 
 KEEL = Member(MemberType.KEEL)
 GUNWALE = Member(MemberType.GUNWALE)
