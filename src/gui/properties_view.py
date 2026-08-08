@@ -51,14 +51,15 @@ class PropertiesView(QTableView):
         # Ensure model signal is accessible
         self.properties_changed = self._model.properties_changed
     
-    def set_properties(self, property_defs, values):
+    def set_properties(self, property_defs, values=None, accessors=None):
         """Set the properties to display.
         
         Args:
             property_defs: List of PropertyDefinition objects
-            values: Dictionary mapping property names to their current values
+            values: Optional dictionary mapping property names to their current values
+            accessors: Optional dictionary mapping property names to PropertyAccessor objects
         """
-        self._model.set_properties(property_defs, values)
+        self._model.set_properties(property_defs, values, accessors)
         self._adjust_height()
     
     def clear(self):

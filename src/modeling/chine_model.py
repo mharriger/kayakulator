@@ -1,4 +1,4 @@
-from OCC.Core.gp import gp_Pnt, gp_Pln
+from OCC.Core.gp import gp_Pnt, gp_Pln, gp_Pnt2d
 from OCC.Core.Geom import Geom_Plane
 from OCC.Core.TColgp import TColgp_Array1OfPnt
 from OCC.Core.GProp import GProp_PEquation
@@ -37,15 +37,15 @@ class ChineModel(StringerModel):
             self.modeling_complete = True
     
     @property
-    def endpoints(self) -> list[gp_Pnt, gp_Pnt]:
+    def endpoints(self) -> list[gp_Pnt2d, gp_Pnt2d]:
         return self._endpoints
     
     @endpoints.setter
-    def endpoints(self, value: list[gp_Pnt, gp_Pnt]):
+    def endpoints(self, value: list[gp_Pnt2d, gp_Pnt2d]):
         if len(value) != 2:
             raise ValueError("Endpoint value must have length 2")
-        if not all(isinstance(value, gp_Pnt)):
-            raise TypeError("Endpoints must be gp_Pnt")
+        if not all(isinstance(pt, gp_Pnt2d) for pt in value):
+            raise TypeError("Endpoints must be gp_Pnt2d")
         self.modeling_complete = False
         self._endpoints = value
         self._fit_bspline()
@@ -69,7 +69,7 @@ class ChineModel(StringerModel):
         offset_array = TColgp_Array1OfPnt(1, len(self._offsets))
         for idx, pt in enumerate(self._offsets):
             offset_array.SetValue(idx + 1, gp_Pnt(*pt))
-        peq = GProp_PEquation(offset_array, 1)
+        peq = GProp_PEquation(offset_array, 50) #TODO: The tolerance should be configurable
 
         if peq.IsPlanar():
             plane = peq.Plane()

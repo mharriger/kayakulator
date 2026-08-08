@@ -3,6 +3,11 @@ Main entrypoint for the application.
 Sets up the GUI, and handles the modeling and output if run with --no-gui flag
 """
 
+import faulthandler
+faulthandler.enable()
+import builtins
+builtins.NO_SOLIDS = False
+
 from gui.mainwindow import MainWindow
 from PySide6.QtWidgets import QApplication
 import settings_manager

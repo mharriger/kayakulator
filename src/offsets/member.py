@@ -29,8 +29,8 @@ class Member:
 
     def __repr__(self):
         if self.type in MULTI_MEMBER_TYPES:
-            return f"{self.membertype.value}{self.index}"
-        return self.membertype.value
+            return f"{self.type.value}{self.index}"
+        return self.type.value
     
 # Convenience constructors
 def chine(i: int) -> Member:

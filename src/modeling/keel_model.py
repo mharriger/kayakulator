@@ -1,16 +1,13 @@
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Dir, gp_Pln, gp_Ax3, gp_Ax2
 from OCC.Core.TColgp import TColgp_Array1OfPnt
 from OCC.Core.GCE2d import GCE2d_MakeSegment
-from OCC.Core.GeomAPI import geomapi
-from OCC.Core.GeomLProp import GeomLProp_CLProps
-from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_Transform
-from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakePipe
-from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse
-from OCC.Core.TopTools import TopTools_ListOfShape
+from OCC.Extend.TopologyUtils import TopologyExplorer
+from OCC.Core.BRepGProp import brepgprop_SurfaceProperties
+from OCC.Core.GProp import GProp_GProps
 
 from minimum_energy_bspline import minimum_energy_bspline
 from occ_helpers import bspline_to_occ_bspline
-from .geom_functions import place_shape_by_ax2, trim_shape_with_plane, YZ_PLANE
+from .geom_functions import get_plane_from_face
 
 from modeling.stringer_model import StringerModel
 
@@ -64,3 +61,38 @@ class KeelModel(StringerModel):
     @property
     def points2d(self):
         return [(y,z) for _,y,z in (self._gunwale_bow_endpoint, self._chine0_bow_endpoint) + tuple(self._offsets) + (self._chine0_stern_endpoint, self._gunwale_stern_endpoint)]
+    
+    def _get_stem_stern_faces_front_to_back(self):
+        explorer = TopologyExplorer(self.solid)
+        face_area_dict = {}
+        for face in explorer.faces():
+            face_pln = get_plane_from_face(face)
+            if face_pln.Axis().Direction().Coord()[0] == 0:
+                props = GProp_GProps()
+                brepgprop_SurfaceProperties(face, props)
+                face_area_dict[props.Mass()] = face
+        if len(face_area_dict) < 4:
+            raise ValueError("Could not find four large planar faces that are normal to the YZ plane")
+        return [face_area_dict[key] for key in sorted(face_area_dict.keys(), reverse=True)[0:4]]
+    
+    @property
+    def inside_face_stem(self):
+        """
+        Return the inside face of the stem, which is the face that is normal to the YZ plane
+        and has the smallest X value. This is used for trimming the keel with a plane.
+        """
+        # Find the two large faces that are not normal to the YZ plane, return the one with the highest Y value
+        explorer = TopologyExplorer(self.solid)
+        face_area_dict = {}
+        for face in explorer.faces():
+            face_pln = get_plane_from_face(face)
+            if face_pln.Axis().Direction().Coord()[0] == 0:
+                props = GProp_GProps()
+                brepgprop_SurfaceProperties(face, props)
+                face_area_dict[props.Mass()] = face
+        if len(face_area_dict) < 2:
+            raise ValueError("Could not find two large faces that are not normal to the YZ plane")
+        if face_area_dict[max(face_area_dict.keys())].Location().Coord()[1] > face_area_dict[sorted(face_area_dict.keys())[-2]].Location().Coord()[1]:
+            return face_area_dict[max(face_area_dict.keys())]
+        else:
+            return face_area_dict[sorted(face_area_dict.keys())[-2]]

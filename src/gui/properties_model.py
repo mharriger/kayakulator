@@ -1,6 +1,7 @@
 """Properties model - QAbstractTableModel for displaying and editing properties."""
 
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, Signal
 from PySide6.QtGui import QColor, QBrush
 
@@ -15,6 +16,12 @@ class PropertyRole:
     VALIDATOR = Qt.UserRole + 2
     CHOICES = Qt.UserRole + 3
     DEFINITION = Qt.UserRole + 4
+
+
+@dataclass(frozen=True)
+class PropertyAccessor:
+    getter: Callable[[], Any]
+    setter: Optional[Callable[[Any], None]] = None
 
 
 class PropertiesModel(QAbstractTableModel):
@@ -34,21 +41,25 @@ class PropertiesModel(QAbstractTableModel):
         super().__init__(parent)
         self._property_defs: List[PropertyDefinition] = []
         self._values: Dict[str, Any] = {}
+        self._accessors: Dict[str, PropertyAccessor] = {}
     
     def set_properties(
         self, 
         property_defs: List[PropertyDefinition], 
-        values: Dict[str, Any]
+        values: Optional[Dict[str, Any]] = None,
+        accessors: Optional[Dict[str, PropertyAccessor]] = None,
     ) -> None:
         """Set the properties to display.
         
         Args:
             property_defs: List of PropertyDefinition objects
             values: Dictionary mapping property names to their current values
+            accessors: Optional dict mapping property names to live getters/setters
         """
         self.beginResetModel()
         self._property_defs = property_defs
-        self._values = dict(values)  # Make a copy
+        self._values = dict(values) if values else {}
+        self._accessors = dict(accessors) if accessors else {}
         self.endResetModel()
     
     def clear(self) -> None:
@@ -56,6 +67,7 @@ class PropertiesModel(QAbstractTableModel):
         self.beginResetModel()
         self._property_defs = []
         self._values = {}
+        self._accessors = {}
         self.endResetModel()
     
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
@@ -70,6 +82,23 @@ class PropertiesModel(QAbstractTableModel):
             return 0
         return 2
     
+    def _read_property_value(self, property_name: str) -> Any:
+        """Read a property value from local storage or live accessors."""
+        if property_name in self._values:
+            return self._values[property_name]
+        accessor = self._accessors.get(property_name)
+        if accessor:
+            return accessor.getter()
+        return None
+
+    def _write_property_value(self, property_name: str, value: Any) -> None:
+        """Write a property value through live accessors or local storage."""
+        accessor = self._accessors.get(property_name)
+        if accessor and accessor.setter is not None:
+            accessor.setter(value)
+        else:
+            self._values[property_name] = value
+
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
         """Return data for the given index and role."""
         if not index.isValid() or index.row() >= len(self._property_defs):
@@ -87,7 +116,7 @@ class PropertiesModel(QAbstractTableModel):
         # Value column
         elif col == 1:
             if role == Qt.DisplayRole or role == Qt.EditRole or role == Qt.ForegroundRole:
-                value = self._values.get(prop_def.name)
+                value = self._read_property_value(prop_def.name)
                 # Format color for display
                 if isinstance(value, tuple) and len(value) == 3:
                     if role == Qt.DisplayRole:
@@ -143,8 +172,8 @@ class PropertiesModel(QAbstractTableModel):
         if prop_def.prop_type == PropertyType.COLOR and isinstance(value, QColor):
             value = (value.red(), value.green(), value.blue())
         
-        # Store the value
-        self._values[prop_def.name] = value
+        # Store the value through the adapter or local storage
+        self._write_property_value(prop_def.name, value)
         
         # Emit signals
         self.dataChanged.emit(index, index, [Qt.EditRole, Qt.DisplayRole])
@@ -178,8 +207,8 @@ class PropertiesModel(QAbstractTableModel):
     
     def get_property_value(self, property_name: str) -> Any:
         """Get the value of a property by name."""
-        return self._values.get(property_name)
+        return self._read_property_value(property_name)
     
     def get_all_values(self) -> Dict[str, Any]:
         """Get all property values as a dictionary."""
-        return dict(self._values)
+        return {prop_def.name: self._read_property_value(prop_def.name) for prop_def in self._property_defs}

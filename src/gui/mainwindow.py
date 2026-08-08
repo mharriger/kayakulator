@@ -8,7 +8,8 @@ from PySide6.QtWidgets import(
      QStyle,
      QVBoxLayout,
      QWidget,
-     QStatusBar
+     QStatusBar,
+     QApplication
 )
 from PySide6.QtGui import (
     QAction,
@@ -22,7 +23,9 @@ from modeling.geom_functions import make_profile_shape, mirror_shape_across_yz_p
 from gui.document_tree_widget import DocumentTreeWidget
 from gui.properties_view import PropertiesView
 from gui.properties_controller import PropertiesController
+from gui import kayakulator_document_tree_model
 from offsets.member import KEEL, GUNWALE, chine, DECKRIDGE, MemberType
+from export.export_for_freecad import export_for_freecad
 
 from .modeling_worker import ModelingWorker, ModelingWorkerSignals
 
@@ -106,14 +109,16 @@ class MainWindow(QMainWindow):
         self.display.EraseAll()
         offsets = load_offset_file(fileName[0])
         self._current_document = KayakulatorDocument()
+        QApplication.instance().current_document = self._current_document
         self._current_document.offsets = offsets
-        print(self._current_document.offsets.format_table())
         self._current_document.name = get_metadata(fileName[0])['name']
+        self._current_document.initialize_member_properties()
+        print(self._current_document.offsets.format_table())
         print(f"Loaded kayak: {self._current_document.name}")
         self.optionsPanel.treeWidget.set_document(self._current_document)
         # Initialize the properties controller
         self.optionsPanel.set_document(self._current_document)
-        worker = ModelingWorker(self._current_document)
+        worker = ModelingWorker(self._current_document, build_frames=False)
         worker.signals.finished.connect(self.display_model)
         worker.signals.error.connect(self.notify_error)
         worker.signals.status.connect(self.update_status)
@@ -128,6 +133,42 @@ class MainWindow(QMainWindow):
         print(f"Setting status bar message: {message}")
         self.statusBar().showMessage(message)
     
+    def get_export_shapes(self):
+        if self._current_document is None or self._current_document.model is None:
+            return []
+        shapes = []
+        for member, member_object in self._current_document.model.members.items():
+            if not hasattr(member_object, 'solid') or member_object.solid is None:
+                continue
+            shapes.append(member_object.solid)
+            if member.type not in (MemberType.KEEL, MemberType.DECKRIDGE, MemberType.FRAME):
+                shapes.append(mirror_shape_across_yz_plane(member_object.solid))
+        return shapes
+
+    def export_to_step(self):
+        if self._current_document is None or self._current_document.model is None:
+            self.notify_error("No model is loaded for export")
+            return
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            caption="Export STEP File",
+            filter="STEP Files (*.step *.stp)"
+        )
+        if not filename:
+            return
+
+        shapes = self.get_export_shapes()
+        if not shapes:
+            self.notify_error("No solid geometry available to export")
+            return
+
+        try:
+            export_for_freecad(shapes, filename)
+            self.statusBar().showMessage(f"Exported {len(shapes)} solids to {filename}")
+        except Exception as exc:
+            self.notify_error(f"Export failed: {exc}")
+
     def make_compound_if_needed(self, shape_or_list):
         if isinstance(shape_or_list, list):
             if len(shape_or_list) > 1:
@@ -160,8 +201,8 @@ class MainWindow(QMainWindow):
         self.display.Context.Display(shape, True)
         return shape
 
-    def display_stringer(self, pipe, color: Quantity_Color) -> AIS_Shape:
-        shape = AIS_Shape(pipe)
+    def display_solid(self, solid, color: Quantity_Color) -> AIS_Shape:
+        shape = AIS_Shape(solid)
         drawer = shape.Attributes()
 
         # Enable drawing face boundaries
@@ -186,10 +227,11 @@ class MainWindow(QMainWindow):
         self.display.Context.Display(shape, True)
         return shape
     
-    def _get_stringer_color(self, member):
-        return Quantity_Color(*[c / 256.0 for c in self._current_document.stringer_properties[member].color], Quantity_TOC_RGB)
+    def _get_member_color(self, member):
+        return Quantity_Color(*[c / 256.0 for c in self._current_document.member_properties[member].color], Quantity_TOC_RGB)
 
     def display_frame(self, wire, color: Quantity_Color) -> AIS_Shape:
+        if not wire: return None
         shape = AIS_Shape(wire)
         drawer = shape.Attributes()
 
@@ -208,9 +250,89 @@ class MainWindow(QMainWindow):
         for shape in selected_shapes:
             print(f"Selected shape: {shape}")
 
+    def _find_tree_item(self, root_item, member, category=None):
+        if root_item is None:
+            return None
+        item_member = root_item.data(Qt.UserRole)
+        item_category = root_item.data(kayakulator_document_tree_model.KayakulatorDocumentTreeModel.CATEGORY_ROLE) if hasattr(root_item, 'data') else None
+        if item_member == member and item_category == category:
+            return root_item
+        for row in range(root_item.rowCount()):
+            child = root_item.child(row)
+            result = self._find_tree_item(child, member, category)
+            if result is not None:
+                return result
+        return None
+
+    def _is_category_checked(self, member, category):
+        tree_model = self.optionsPanel.treeWidget.tree_model
+        if tree_model is None:
+            return False
+        root_item = tree_model.invisibleRootItem()
+        item = self._find_tree_item(root_item, member, category)
+        return item is not None and item.checkState() == Qt.Checked
+
+    def _generate_stringer_solid(self, member):
+        if self._current_document is None or member not in self._current_document.model.stringers:
+            return
+        if self._current_document.member_shapes.get(member, {}).get("solid"):
+            return
+        stringer = self._current_document.model.stringers[member]
+        try:
+            solid = stringer.solid
+        except Exception as exc:
+            self.notify_error(f"Failed to generate solid for {member}: {exc}")
+            return
+        shapes = [AIS_Shape(solid)]
+        if member.type not in (MemberType.KEEL, MemberType.DECKRIDGE, MemberType.FRAME):
+            shapes.append(AIS_Shape(mirror_shape_across_yz_plane(solid)))
+        self._current_document.member_shapes.setdefault(member, {})["solid"] = shapes
+        for shape in shapes:
+            drawer = shape.Attributes()
+            drawer.SetFaceBoundaryDraw(True)
+            line_aspect = Prs3d_LineAspect(
+                self._get_member_color(member),
+                Aspect_TOL_SOLID,
+                2.0
+            )
+            drawer.SetFaceBoundaryAspect(line_aspect)
+            drawer.SetColor(self._get_member_color(member))
+
+    def _generate_frame_shapes(self, member):
+        if self._current_document is None or member.type != MemberType.FRAME:
+            return
+        existing = self._current_document.member_shapes.get(member, {}).get("solid")
+        if existing:
+            return
+        try:
+            frame_model = self._current_document.build_frame(member.index)
+        except Exception as exc:
+            self.notify_error(f"Failed to build frame {member.index}: {exc}")
+            return
+        try:
+            solid = frame_model.solid
+        except Exception as exc:
+            self.notify_error(f"Failed to generate solid for frame {member.index}: {exc}")
+            return
+        shape = AIS_Shape(solid)
+        drawer = shape.Attributes()
+        drawer.SetFaceBoundaryDraw(True)
+        line_aspect = Prs3d_LineAspect(
+            self._get_member_color(member),
+            Aspect_TOL_SOLID,
+            2.0
+        )
+        drawer.SetFaceBoundaryAspect(line_aspect)
+        drawer.SetColor(self._get_member_color(member))
+        self._current_document.member_shapes.setdefault(member, {})["solid"] = [shape]
+
     def _set_shapes_visibility(self, member, category, visible: bool):
         if self._current_document is None:
             return
+        if visible and category == "solid" and member.type != MemberType.FRAME:
+            self._generate_stringer_solid(member)
+        if visible and member.type == MemberType.FRAME and category is None:
+            self._generate_frame_shapes(member)
         shapes = self._current_document.member_shapes.get(member, {}).get(category, [])
         for shape in shapes:
             if visible:
@@ -223,6 +345,8 @@ class MainWindow(QMainWindow):
         visible = state == Qt.Checked
         if member is None:
             return
+        if member.type == MemberType.FRAME and category is None and visible:
+            self._generate_frame_shapes(member)
         if category is None:
             for cat in ["offsets", "curve", "solid"]:
                 self._set_shapes_visibility(member, cat, visible)
@@ -230,36 +354,39 @@ class MainWindow(QMainWindow):
             self._set_shapes_visibility(member, category, visible)
 
     def display_model(self, s=None):
-        
+        self.display.EraseAll()
+        self._current_document.member_shapes.clear()
         for (memberKey, memberObject) in self._current_document.model.members.items():
+            if memberKey.type == MemberType.FRAME:
+                self._current_document.member_shapes[memberKey] = {
+                    "solid": [],
+                    "curve": [self.display_wire(memberObject._exterior_wire, Quantity_Color(Quantity_NOC_BLACK)), self.display_wire(memberObject._interior_wire, Quantity_Color(Quantity_NOC_BLACK))],
+                    "offsets": []
+                }
+                continue
+
+            curve_shapes = [self.display_wire(self.make_compound_if_needed(memberObject.wires), self._get_member_color(memberKey))]
+            if memberKey.type not in (MemberType.KEEL, MemberType.DECKRIDGE, MemberType.FRAME):
+                curve_shapes.append(self.display_wire(mirror_shape_across_yz_plane(self.make_compound_if_needed(memberObject.wires)), self._get_member_color(memberKey)))
+
             self._current_document.member_shapes[memberKey] = {
-                "solid": [
-                    None if memberKey.type == MemberType.FRAME else self.display_stringer(memberObject.pipe, self._get_stringer_color(memberKey)),
-                    None if memberKey.type in (MemberType.KEEL, MemberType.DECKRIDGE, MemberType.FRAME) else self.display_stringer(mirror_shape_across_yz_plane(memberObject.pipe), self._get_stringer_color(memberKey))
-                ],
-                "curve": [
-                            self.display_frame(memberObject._exterior_wire, Quantity_Color(Quantity_NOC_BLACK)) if memberKey.type == MemberType.FRAME else self.display_wire(memberObject.wires, self._get_stringer_color(memberKey)),
-                            None if memberKey.type in (MemberType.KEEL, MemberType.DECKRIDGE, MemberType.FRAME) else self.display_wire(mirror_shape_across_yz_plane(self.make_compound_if_needed(self._current_document.model.members[memberKey].wires)), self._get_stringer_color(memberKey))
-                          ],
-                "offsets": [None if memberKey.type == MemberType.FRAME else self.display_offset(o, self._get_stringer_color(memberKey)) for o in self._current_document.offsets.get_member_coordinates(memberKey, ['x', 'y', 'z'])]
+                "solid": [],
+                "curve": curve_shapes,
+                "offsets": [self.display_offset(o, self._get_member_color(memberKey)) for o in self._current_document.offsets.get_member_coordinates(memberKey, ['x', 'y', 'z'])]
             }
 
 
     def on_properties_changed(self, member = None):
         """Handle property changes"""
         if self._current_document is not None and self._current_document.offsets is not None:
-            # Changing the profile shape does not require remodeling, only need to redisplay the pipes
+            if hasattr(member, 'remodel'):
+                member.remodel()
             if member and member in self._current_document.model.stringers:
-                self._current_document.model.stringers[member].profile_shape = make_profile_shape(self._current_document.stringer_properties[member].profile_shape)
+                self._current_document.model.stringers[member].profile_shape = make_profile_shape(self._current_document.member_properties[member].profile_shape)
             # TODO: Only remove/redraw the affected stringer(s) instead of everything
             for shape in self._current_document.member_shapes.get(member, {}).get("solid", []):
                 self.display.Context.Remove(shape, False)
-            self._current_document.member_shapes.setdefault(member, {})["solid"] = [
-                self.display_stringer(self._current_document.model.stringers[member].pipe, self._get_stringer_color(member))
-            ]
-            self._current_document.member_shapes[member]["solid"].append(
-                self.display_stringer(mirror_shape_across_yz_plane(self._current_document.model.stringers[member].pipe), self._get_stringer_color(member))
-            )
+            self.display_model()
 
 class OptionsPanel(QWidget):
     """Left panel containing tree view and properties."""
@@ -331,3 +458,10 @@ class MainToolbar(QToolBar):
         open_action.setStatusTip("Open an offsets file")
         open_action.triggered.connect(self.parent().open_clicked)
         self.addAction(open_action)
+
+        pixmapsave = getattr(QStyle, "SP_DialogSaveButton")
+        iconsave = self.style().standardIcon(pixmapsave)
+        export_action = QAction("Export STEP...", self, icon=iconsave)
+        export_action.setStatusTip("Export solid geometry to STEP file")
+        export_action.triggered.connect(self.parent().export_to_step)
+        self.addAction(export_action)

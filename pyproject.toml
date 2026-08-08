@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kayakulator"
+version = "0.1.0"
+description = "Parametric kayak hull modeling and export tooling built with pythonOCC and PySide6"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pythonocc>=7.8.1.1",
+    "jsonschema>=4.23",
+    "numpy>=1.26",
+    "pyside6>=6.11",
+    "scikit-spatial>=9.0",
+    "scipy>=1.14",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,23 +1,38 @@
 from enum import Enum
+from dataclasses import dataclass, field
 
-from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Lin, gp_Dir, gp_Dir2d, gp_Pln, gp_Ax1, gp_Ax2, gp_Ax3, gp_Ax2d, gp_Circ, gp_Trsf
+from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Lin, gp_Dir, gp_Dir2d, gp_Pln, gp_Ax1, gp_Ax2, gp_Ax3, gp_Ax2d, gp_Circ, gp_Trsf, gp_Vec
 from OCC.Core.Geom import Geom_Plane, Geom_Line, Geom_Curve
-from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf, GeomAPI_IntSS, GeomAPI_IntCS, GeomAPI_ProjectPointOnCurve
+from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf, GeomAPI_IntSS, GeomAPI_IntCS
 from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve, Geom2dAPI_ProjectPointOnCurve
 from OCC.Core.Geom2d import Geom2d_Circle, Geom2d_Line, Geom2d_TrimmedCurve
+from OCC.Core.GeomAbs import GeomAbs_Plane
 from OCC.Core.IntAna import IntAna_IntConicQuad
 from OCC.Core.GCE2d import GCE2d_MakeSegment
-from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Transform, BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
-from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace
-from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Section
-from OCC.Extend.TopologyUtils import TopologyExplorer
+from OCC.Core.BRepBuilderAPI import (
+    BRepBuilderAPI_MakeFace,
+    BRepBuilderAPI_Transform,
+    BRepBuilderAPI_MakeWire,
+    BRepBuilderAPI_MakeEdge,
+    BRepBuilderAPI_MakeVertex
+)
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace, BRepPrimAPI_MakePrism
+from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse, BRepAlgoAPI_Section
+from OCC.Core.BRepAdaptor import BRepAdaptor_Surface
 from OCC.Core.GC import GC_MakeCircle
 from OCC.Core.TopoDS import TopoDS_Face, TopoDS_Shape
-from enum import Enum
+from OCC.Extend.TopologyUtils import TopologyExplorer
 
+from attr import dataclass
 import skspatial.objects as skso
 
-from stringer_properties import ProfileShape
+from member_properties import ProfileShape
+from modeling.stringer_profile import StringerProfile
+from modeling.semantic_topology import SemanticTopology, TopologyRole
+
+
+from OCC.Core.TopExp import TopExp_Explorer
+from OCC.Core.TopAbs import TopAbs_EDGE
 
 YZ_PLANE = gp_Pln(gp_Pnt(0,0,0), gp_Dir())
 
@@ -30,6 +45,12 @@ class x_position(Enum):
     LEFT = 1
     CENTER = 2
     RIGHT = 3
+
+class LineSegment:
+    def __init__(self, start: gp_Pnt, end: gp_Pnt):
+        self.start = start
+        self.end = end
+        self.edge = BRepBuilderAPI_MakeEdge(self.start, self.end).Edge()
 
 def intersect_plane_z_axis(plane) -> gp_Ax1:
     """Create a coordinate system for the plane with the origin at (0,0,z) where z is the plane's height on the Z axis."""
@@ -72,7 +93,7 @@ def project_gp_points_to_plane(points, plane: Geom_Plane):
         # plane.D0(x, y, pt_3d)
     return pts_2d
 
-def approximate_endpoints(pts) -> tuple[gp_Pnt, gp_Pnt]:
+def approximate_endpoints(pts) -> list[gp_Pnt2d, gp_Pnt2d]:
     """
     Approximate the bow and stern endpoints of the chine by:
     1. Fitting a circle to the projected points in 2D plane coordinates
@@ -85,9 +106,9 @@ def approximate_endpoints(pts) -> tuple[gp_Pnt, gp_Pnt]:
     if inter.NbPoints() < 2:
         raise RuntimeError("Circle does not intersect X axis")
     if inter.Point(1).Coord()[1] < inter.Point(2).Coord()[1]:
-        return inter.Point(1), inter.Point(2)
+        return [inter.Point(1), inter.Point(2)]
     else:
-        return inter.Point(2), inter.Point(1)
+        return [inter.Point(2), inter.Point(1)]
 
 def segment_polyline_near_straight(points: list[gp_Pnt2d], max_dev=2.0) -> list[Geom2d_TrimmedCurve]:
     """Segment a 2D polyline into straight sections using pythocc.
@@ -204,9 +225,21 @@ def trimCurveWithCurve(curveToTrim, otherCurve):
         # More than two intersections
         raise ValueError(f"Curve intersection resulted in {num_intersections} points. Expected 0, 1, or 2.")
 
-def make_profile_shape(shapeSpecs: ProfileShape, origin_pos_x: x_position = x_position.RIGHT, origin_pos_y: y_position = y_position.CENTER) -> TopoDS_Face:
+def make_profile_shape(shapeSpecs: ProfileShape,
+                       origin_pos_x: x_position = x_position.RIGHT,
+                       origin_pos_y: y_position = y_position.CENTER) -> StringerProfile:
     if shapeSpecs.shape_type == "circle":
-        return make_circle_face(shapeSpecs.radius)
+        face = make_circle_face(shapeSpecs.radius)
+        topo_explorer = TopologyExplorer(face)
+        if TopologyExplorer.number_of_edges() != 1:
+            raise RuntimeError("Circle face has more than one edge")
+        semtopo = SemanticTopology()
+        semtopo.set_edge_role(topo_explorer.edges().Next(), TopologyRole.OUTER) \
+            .set_edge_role(topo_explorer.edges().Next(), TopologyRole.INNER) \
+            .set_edge_role(topo_explorer.edges().Next(), TopologyRole.TOP) \
+            .set_edge_role(topo_explorer.edges().Next(), TopologyRole.BOTTOM)
+        return StringerProfile(face, semtopo)
+        
     elif shapeSpecs.shape_type == "rectangle":
         return make_rectangle_face(shapeSpecs.width, shapeSpecs.height, origin_pos_x, origin_pos_y)
     else:
@@ -227,7 +260,10 @@ def make_circle_face(radius: float) -> TopoDS_Face:
     wire = BRepBuilderAPI_MakeWire(edge).Wire()
     return BRepBuilderAPI_MakeFace(wire).Face()
 
-def make_rectangle_face(width: float, height: float, origin_pos_x: x_position = x_position.RIGHT, origin_pos_y: y_position = y_position.CENTER) -> TopoDS_Face:
+def make_rectangle_face(width: float,
+                        height: float,
+                        origin_pos_x: x_position = x_position.RIGHT,
+                        origin_pos_y: y_position = y_position.CENTER) -> StringerProfile:
     """
     Creates a rectangular profile face aligned according to the specified origin positions.
     """
@@ -253,10 +289,36 @@ def make_rectangle_face(width: float, height: float, origin_pos_x: x_position = 
         y_max = 0.0
     else:
         raise ValueError(f"Invalid y_position: {origin_pos_y}")
-    
-    # 2. Create a flat XY face using local parametric bounds
-    local_axes = gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1))
-    return BRepBuilderAPI_MakeFace(gp_Pln(local_axes), x_min, x_max, y_min, y_max).Face()
+
+    top_left = BRepBuilderAPI_MakeVertex(gp_Pnt(x_min, y_max, 0)).Vertex()
+    top_right = BRepBuilderAPI_MakeVertex(gp_Pnt(x_max, y_max, 0)).Vertex()
+    bottom_left = BRepBuilderAPI_MakeVertex(gp_Pnt(x_min, y_min, 0)).Vertex()
+    bottom_right = BRepBuilderAPI_MakeVertex(gp_Pnt(x_max, y_min, 0)).Vertex()
+
+    top = BRepBuilderAPI_MakeEdge(top_left, top_right).Edge()
+    right = BRepBuilderAPI_MakeEdge(top_right, bottom_right).Edge()
+    bottom = BRepBuilderAPI_MakeEdge(bottom_right, bottom_left).Edge()
+    left = BRepBuilderAPI_MakeEdge(bottom_left, top_left).Edge()
+
+    wire_builder = BRepBuilderAPI_MakeWire(top, right, bottom, left)
+
+    if not wire_builder.IsDone():
+        raise RuntimeError(f"Failed to make wire: {wire_builder.Error()}")
+
+    wire = wire_builder.Wire()
+    topexp = TopExp_Explorer(wire, TopAbs_EDGE)
+    while topexp.More():
+        if not any(topexp.Current().IsSame(edge) for edge in [top, bottom, left, right]):
+            raise RuntimeError("Edge is not in wire")
+        topexp.Next()
+    face = BRepBuilderAPI_MakeFace(wire).Face()
+    semtopo = SemanticTopology()
+    semtopo.set_edge_role(top, TopologyRole.TOP)
+    semtopo.set_edge_role(right, TopologyRole.RIGHT)
+    semtopo.set_edge_role(bottom, TopologyRole.BOTTOM)
+    semtopo.set_edge_role(left, TopologyRole.LEFT)
+
+    return StringerProfile(face, wire, semtopo)
 
 def construct_perpendicular_in_plane(plane: gp_Pln, line: gp_Lin, point: gp_Pnt):
  
@@ -285,6 +347,16 @@ def place_shape_by_ax2(shape: TopoDS_Shape, ax2: gp_Ax2) -> TopoDS_Face:
     transformer = BRepBuilderAPI_Transform(trsf)
     transformer.Perform(shape)
     return transformer.Shape()
+
+def get_plane_from_face(face: TopoDS_Face) -> gp_Pln:
+    """
+    Takes a TopoDS_Face and returns a gp_Pln object.
+    """
+    surf = BRepAdaptor_Surface(face, True)
+    if surf.GetType() != GeomAbs_Plane:
+        return None
+    return surf.Plane()
+
 
 def trim_shape_with_plane(shape: TopoDS_Shape, plane: gp_Pln, pt: gp_Pnt) -> TopoDS_Shape:
     """
@@ -318,7 +390,6 @@ def mirror_shape_across_yz_plane(shape: TopoDS_Shape) -> TopoDS_Shape:
         A new TopoDS_Shape that is the mirror image of the input shape across the YZ plane
     """
     # Create a transformation that mirrors across the YZ plane (X=0)
-    # This is done by scaling X by -1
     trsf = gp_Trsf()
     trsf.SetMirror(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0)))  # Mirror across plane with normal (1,0,0)
     
@@ -378,4 +449,55 @@ def centroid(pnts: list[gp_Pnt]) -> gp_Pnt:
     
     return gp_Pnt(total_x / num_points, total_y / num_points, total_z / num_points)
 
+def make_symmetrical_prism(shape_profile, direction_vector: gp_Vec, total_length):
+    direction_vector.Normalize()
+    # Calculate half the length for each direction
+    half_length = total_length / 2.0
     
+    # 1. Extrude in the forward direction
+    forward_vec = direction_vector * half_length
+    forward_prism = BRepPrimAPI_MakePrism(shape_profile, forward_vec).Shape()
+    
+    # 2. Extrude in the reverse direction
+    reverse_vec = direction_vector * -half_length
+    reverse_prism = BRepPrimAPI_MakePrism(shape_profile, reverse_vec).Shape()
+    
+    # 3. Fuse both primitives together
+    symmetric_shape = BRepAlgoAPI_Fuse(forward_prism, reverse_prism).Shape()
+    
+    return symmetric_shape
+
+def mirror_2d_points(points: list[gp_Pnt2d]) -> list[gp_Pnt2d]:
+    """
+    Mirror a list of 2D points across the Y-axis (X=0).
+    
+    Args:
+        points: List of gp_Pnt2d objects to mirror
+    """
+    mirrored_points = []
+    for pt in reversed(points):  # Iterate in reverse order to maintain orientation
+        mirrored_pt = gp_Pnt2d(-pt.X(), pt.Y())
+        if mirrored_pt.Distance(pt) > 1e-6:  # Avoid duplicating points on the Y-axis
+            mirrored_points.append(mirrored_pt)
+    return mirrored_points
+
+def make_wire_from_points(points):
+    """
+    Create a closed polygonal wire from an ordered sequence of gp_Pnt.
+
+    points: sequence of gp_Pnt, ordered around the polygon.
+    """
+    if len(points) < 3:
+        raise ValueError("A polygon requires at least 3 points")
+
+    wire_builder = BRepBuilderAPI_MakeWire()
+
+    for i, p1 in enumerate(points):
+        p2 = points[(i + 1) % len(points)]
+        edge = BRepBuilderAPI_MakeEdge(p1, p2).Edge()
+        wire_builder.Add(edge)
+
+    if not wire_builder.IsDone():
+        raise RuntimeError("Failed to create wire")
+
+    return wire_builder.Wire()

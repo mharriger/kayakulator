@@ -5,7 +5,7 @@ Maps StringerProperties data to table columns for widget binding.
 """
 
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
-from stringer_properties import StringerProperties, ProfileCircle, ProfileRectangle
+from member_properties import StringerProperties, ProfileCircle, ProfileRectangle, MemberProperties
 
 
 class StringerPropertiesModel(QAbstractTableModel):
@@ -134,9 +134,13 @@ class StringerPropertiesModel(QAbstractTableModel):
         new_props = StringerProperties(
             profile_shape=new_shape,
             color=self.current_properties.color,
-            bow_endpoint_z=self.current_properties.bow_endpoint_z,
-            stern_endpoint_z=self.current_properties.stern_endpoint_z,
+            bow_endpoint_y=self.current_properties.bow_endpoint_y,
+            stern_endpoint_y=self.current_properties.stern_endpoint_y,
         )
-        self.document.stringer_properties[self.current_member] = new_props
-        self.document.model.members[self._current_member]._profile_shape = new_shape
+        self.document.member_properties[self.current_member] = new_props
+        # Update the underlying model if available
+        try:
+            self.document.model.members[self.current_member].profile = new_shape
+        except Exception:
+            pass
         self.current_properties = new_props

@@ -8,7 +8,7 @@ associated components, suitable for display in a PySide6 QTreeView.
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor
 from PySide6.QtCore import Qt, Signal
 from kayakulator_document import KayakulatorDocument
-from offsets.member import GUNWALE, KEEL, DECKRIDGE, chine, Member
+from offsets.member import GUNWALE, KEEL, DECKRIDGE, chine, frame, Member, MemberType
 
 
 class KayakulatorDocumentTreeModel(QStandardItemModel):
@@ -93,15 +93,28 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
                     chine_item = self._create_member_item(f"Chine {i}", chine(i))
                     chines_item.appendRow(chine_item)
                     self._addStringerSubitems(chine_item, chine(i))
+
+        # Add frame members
+        if self.document.offsets:
+            station_count = self.document.offsets.station_count
+            if station_count > 0:
+                frames_item = QStandardItem("Frames")
+                root_item.appendRow(frames_item)
+                for i in range(station_count):
+                    frame_item = self._create_member_item(f"Frame {i}", frame(i))
+                    frames_item.appendRow(frame_item)
     
     def _create_member_item(self, label: str, member: Member) -> QStandardItem:
         item = QStandardItem(label)
         item.setData(member, Qt.UserRole)
         item.setCheckable(True)
         item.setAutoTristate(True)
-        item.setCheckState(self._compute_member_check_state(member))
-        if member in self.document.stringer_properties:
-            props = self.document.stringer_properties[member]
+        if member.type == MemberType.FRAME:
+            item.setCheckState(Qt.Unchecked)
+        else:
+            item.setCheckState(self._compute_member_check_state(member))
+        if member in self.document.member_properties:
+            props = self.document.member_properties[member]
             color = QColor(*props.color)
             item.setForeground(color)
         return item
@@ -135,7 +148,8 @@ class KayakulatorDocumentTreeModel(QStandardItemModel):
         item.setData(member, Qt.UserRole)
         item.setData(category, self.CATEGORY_ROLE)
         item.setCheckable(True)
-        item.setCheckState(self._visibility_state.get(member, {}).get(category, Qt.Checked))
+        default_state = Qt.Unchecked if category == "solid" else Qt.Checked
+        item.setCheckState(self._visibility_state.get(member, {}).get(category, default_state))
         return item
 
     def _on_item_changed(self, item: QStandardItem):
