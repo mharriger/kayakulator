@@ -44,7 +44,7 @@
         { "hb": 0.829, "hab": 0.319 }
       ],
       "gunwale": { "hb": 0.934, "hab": 0.647 },
-      "deckridge": { "hb": 0.0, "hab": 0.65 }
+      "deckridge": { "hb": 0.5, "hab": 0.65 }
     },
     {
       "location": 11.8,
@@ -55,7 +55,7 @@
         { "hb": 0.523, "hab": 0.400 }
       ],
       "gunwale": { "hb": 0.623, "hab": 0.700 },
-      "deckridge": { "hb": 0.0, "hab": 0.7 }
+      "deckridge": { "hb": 0.5, "hab": 0.7 }
     }
   ]
 }

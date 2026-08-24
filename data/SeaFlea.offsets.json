@@ -1,0 +1,51 @@
+{
+  "name": "Sea Pup",
+  "units": "feet",
+  "stations": [
+    {
+      "location": 0.0,
+      "keel": 0.009,
+      "chines": [
+        { "hab": 0.000, "hb": 0.000 }
+      ],
+      "gunwale": { "hab": 0.800, "hb": 0.000 },
+      "deckridge": { "hab": 0.800, "hb": 0.000 }
+    },
+    {
+      "location": 2.5,
+      "keel": 0.041,
+      "chines": [
+        { "hab": 0.137, "hb": 0.397 }
+      ],
+      "gunwale": { "hab": 0.556, "hb": 0.608 },
+      "deckridge": { "hab": 0.556, "hb": 0.000 }
+    },
+    {
+      "location": 2.250,
+      "keel": 0.0,
+      "chines": [
+        { "hab": 0.100, "hb": 0.643 }
+      ],
+      "gunwale": { "hab": 0.501, "hb": 0.789 },
+      "deckridge": { "hab": 0.710, "hb": 0.200 }
+    },
+    {
+      "location": 3.75,
+      "keel": 0.010,
+      "chines": [
+        { "hab": 0.109, "hb": 0.586 }
+      ],
+      "gunwale": { "hab": 0.501, "hb": 0.745 },
+      "deckridge": { "hab": 0.501, "hb": 0.000 }
+    },
+    {
+      "location": 5.5,
+      "keel": 0.054,
+      "chines": [
+        { "hab": 0.149, "hb": 0.311 }
+      ],
+      "gunwale": { "hab": 0.533, "hb": 0.528 },
+      "deckridge": { "hab": 0.533, "hb": 0.0 }
+    }
+  ]
+}

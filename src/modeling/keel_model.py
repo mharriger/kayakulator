@@ -10,6 +10,8 @@ from occ_helpers import bspline_to_occ_bspline
 from .geom_functions import get_plane_from_face
 
 from modeling.stringer_model import StringerModel
+from .stringer_profile import StringerProfile
+from .semantic_topology import TopologyRole
 
 class KeelModel(StringerModel):
     """
@@ -61,19 +63,15 @@ class KeelModel(StringerModel):
     @property
     def points2d(self):
         return [(y,z) for _,y,z in (self._gunwale_bow_endpoint, self._chine0_bow_endpoint) + tuple(self._offsets) + (self._chine0_stern_endpoint, self._gunwale_stern_endpoint)]
-    
-    def _get_stem_stern_faces_front_to_back(self):
-        explorer = TopologyExplorer(self.solid)
-        face_area_dict = {}
-        for face in explorer.faces():
-            face_pln = get_plane_from_face(face)
-            if face_pln.Axis().Direction().Coord()[0] == 0:
-                props = GProp_GProps()
-                brepgprop_SurfaceProperties(face, props)
-                face_area_dict[props.Mass()] = face
-        if len(face_area_dict) < 4:
-            raise ValueError("Could not find four large planar faces that are normal to the YZ plane")
-        return [face_area_dict[key] for key in sorted(face_area_dict.keys(), reverse=True)[0:4]]
+
+    @StringerModel.profile.setter
+    def profile(self, profile: StringerProfile):
+        for edge in profile.semantic_topology.get_edge(TopologyRole.BOTTOM):
+            profile.semantic_topology.set_edge_role(edge, TopologyRole.OUTER)
+        for edge in profile.semantic_topology.get_edge(TopologyRole.TOP):
+            profile.semantic_topology.set_edge_role(edge, TopologyRole.INNER) 
+        # Call the parent's setter using .fset()
+        StringerModel.profile.fset(self, profile)
     
     @property
     def inside_face_stem(self):

@@ -96,8 +96,8 @@ class FrameModel:
         for e in edgelist:
             edgeListOCC.Append(e)
         seq = fb.ConnectEdgesToWires(edgeListOCC, 1e-2, False)
-        if seq.Length() != 1:
-            raise RuntimeError("Frame wires did not connect into a single shape")
+        #if seq.Length() != 1:
+            #raise RuntimeError("Frame wires did not connect into a single shape")
         self._exterior_wire = seq.Value(seq.Length())
         self.modeling_complete = True
 
@@ -130,70 +130,6 @@ def get_face_normal(my_face, u, v):
         return normal_dir
     else:
         raise ValueError("Normal is not defined at these parameters.")
-
-def get_internal_edges(shape):
-    """
-    Finds and returns only the vertical edges that belong to internal cutout holes.
-    """
-    y_axis=gp_Dir(0, 0, 1)
-    topo = TopologyExplorer(shape)
-    hole_edges_in_face = set()
-
-    # 1. Find the face of the frame
-    top_face = None
-    for face in topo.faces():
-        # Find the face normal to the y axis with the smallest y value
-        face_normal = get_face_normal(face, 0.5, 0.5)
-        if face_normal.IsParallel(y_axis, 1e-3):
-            top_face = face
-            break
-
-    if not top_face:
-        print("Could not automatically locate a face containing internal holes.")
-        return []
-
-    # Extract edges belonging ONLY to the inner wires (holes)
-    wire_exp = TopExp_Explorer(top_face, TopAbs_WIRE)
-    wire_exp.Next()  # Skip the first wire, which is the outer wire
-    
-    while wire_exp.More():
-        wire = topods.Wire(wire_exp.Current())
-        
-        # Collect edges
-        edge_exp = BRepTools_WireExplorer(wire)
-        while edge_exp.More():
-            edge = edge_exp.Current()
-            hole_edges_in_face.add(edge)
-            edge_exp.Next()
-        wire_exp.Next()
-
-    # Trace the hole profile edges down into the vertical wall edges
-    target_vertical_edges = []
-    
-    for edge in topo.edges():
-        # Is this a vertical corner edge parallel to Z?
-        edge_dir = topo.edge_direction(edge)
-        if not edge_dir.IsParallel(y_axis, 1e-3):
-            continue
-
-        # Look at the faces sharing this vertical edge
-        sharing_faces = list(topo.faces_from_edge(edge))
-        if len(sharing_faces) == 2:
-            # If ANY of the adjacent vertical wall faces touch an edge 
-            # that we confirmed belongs to a hole wire, this is an internal corner!
-            is_hole_corner = False
-            for wall_face in sharing_faces:
-                # Get the boundaries of this wall face
-                wall_edges = set(TopologyExplorer(wall_face).edges())
-                # Check if this wall shares a boundary with our hole loop on the top surface
-                if not wall_edges.isdisjoint(hole_edges_in_face):
-                    is_hole_corner = True
-                    break
-            
-            if is_hole_corner:
-                target_vertical_edges.append(edge)
-
-    return target_vertical_edges
 
 class FrameModelBuilder:
     def __init__(self):

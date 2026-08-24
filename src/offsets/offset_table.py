@@ -159,6 +159,82 @@ class OffsetTable:
         
         return "\n".join(lines)
 
+    def to_json_struct(self, units: str = 'mm') -> dict:
+        """Export the offset table into a JSON-serializable dict compatible with the
+        `json_offset_loader` input format.
+        """
+        # Determine chine indices present
+        chine_indices = sorted({m.index for m in self._members if m.type == MemberType.CHINE})
+
+        stations = []
+        for station_idx in sorted(self._stations.keys()):
+            station = {
+                'location': self._stations[station_idx]
+            }
+            # keel
+            keel_offset = self._data.get((station_idx, KEEL))
+            station['keel'] = keel_offset.z if keel_offset is not None else None
+
+            # deckridge
+            deck = self._data.get((station_idx, DECKRIDGE))
+            station['deckridge'] = {'hb': deck.x, 'hab': deck.z} if deck is not None else {'hb': None, 'hab': None}
+
+            # gunwale
+            gw = self._data.get((station_idx, GUNWALE))
+            station['gunwale'] = {'hb': gw.x, 'hab': gw.z} if gw is not None else {'hb': None, 'hab': None}
+
+            # chines list in order of chine_indices
+            chines = []
+            for idx in chine_indices:
+                off = self._data.get((station_idx, chine(idx)))
+                if off is not None:
+                    chines.append({'hb': off.x, 'hab': off.z})
+                else:
+                    chines.append({'hb': None, 'hab': None})
+            station['chines'] = chines
+
+            stations.append(station)
+
+        return {'name': None, 'units': units, 'stations': stations}
+
+    @classmethod
+    def from_json_struct(cls, data: dict) -> 'OffsetTable':
+        """Create an OffsetTable from a dict in the same shape produced by `to_json_struct`.
+        """
+        table = cls()
+        # stations is a list of station dicts
+        stations = data.get('stations', [])
+        # populate station locations
+        table.station_locations = {i: s.get('location') for i, s in enumerate(stations)}
+
+        for idx, s in enumerate(stations):
+            # keel
+            keel_z = s.get('keel')
+            if keel_z is not None:
+                table.set_offset(idx, KEEL, x=0.0, z=keel_z)
+
+            # deckridge
+            deck = s.get('deckridge') or {}
+            if deck.get('hb') is not None or deck.get('hab') is not None:
+                table.set_offset(idx, DECKRIDGE, x=deck.get('hb') or 0.0, z=deck.get('hab') or 0.0)
+
+            # gunwale
+            gw = s.get('gunwale') or {}
+            if gw.get('hb') is not None or gw.get('hab') is not None:
+                table.set_offset(idx, GUNWALE, x=gw.get('hb') or 0.0, z=gw.get('hab') or 0.0)
+
+            # chines
+            chines = s.get('chines', [])
+            for chine_idx, chine_data in enumerate(chines):
+                if chine_data is None:
+                    continue
+                hb = chine_data.get('hb')
+                hab = chine_data.get('hab')
+                if hb is not None or hab is not None:
+                    table.set_offset(idx, chine(chine_idx), x=hb or 0.0, z=hab or 0.0)
+
+        return table
+
 # Example usage
 if __name__ == "__main__":
     table = OffsetTable()

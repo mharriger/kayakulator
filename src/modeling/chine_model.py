@@ -8,6 +8,8 @@ from minimum_energy_bspline import minimum_energy_bspline
 from occ_helpers import bspline_to_occ_bspline
 
 from .stringer_model import StringerModel
+from .stringer_profile import StringerProfile
+from .semantic_topology import TopologyRole
 
 class ChineModel(StringerModel):
     """
@@ -63,6 +65,15 @@ class ChineModel(StringerModel):
         plane.D0(*self._endpoints[0].Coord(), pt1)
         plane.D0(*self._endpoints[1].Coord(), pt2)
         return [pt1, pt2]
+
+    @StringerModel.profile.setter
+    def profile(self, profile: StringerProfile):
+        for edge in profile.semantic_topology.get_edge(TopologyRole.TOP):
+            profile.semantic_topology.set_edge_role(edge, TopologyRole.OUTER)
+        for edge in profile.semantic_topology.get_edge(TopologyRole.BOTTOM):
+            profile.semantic_topology.set_edge_role(edge, TopologyRole.INNER) 
+        # Call the parent's setter using .fset()
+        StringerModel.profile.fset(self, profile)
 
     def _fit_plane(self) -> gp_Pln:
         # Use OCC to find best fit plane

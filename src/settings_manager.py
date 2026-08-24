@@ -10,6 +10,8 @@ class SettingsManager:
             (MemberType.FRAME, "frame_width"): 1.5 * 25.4,
             (MemberType.FRAME, "skin_relief_depth"): 0.075,
             (MemberType.FRAME, "interior_fillet_radius"): 0.5 * 25.4,
+            (MemberType.GUNWALE, "width"): 12.7,
+            (MemberType.GUNWALE, "height"): 12.7
         }
 
     def get(self, key: str) -> any:

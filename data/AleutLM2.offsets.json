@@ -1,0 +1,174 @@
+{
+  "name": "Aleut LM2",
+  "units": "cm",
+  "stations": [
+    {
+      "location": 0,
+      "keel": 32.1,
+      "gunwale": { "hab": 0, "hb": 0 },
+      "chines": [
+        { "hab": 0, "hb": 0 },
+        { "hab": 0, "hb": 0 },
+        { "hab": 0, "hb": 0 },
+        { "hab": 0, "hb": 0 }
+      ],
+      "deckridge": { "hab": 0, "hb": 0 }
+    },
+    {
+      "location": 25,
+      "keel": 13.5,
+      "gunwale": { "hab": 27.1, "hb": 1.0 },
+      "chines": [
+        { "hab": 17.6, "hb": 1.0 },
+        { "hab": 19.1, "hb": 1.0 },
+        { "hab": 22.4, "hb": 0.4 },
+        { "hab": 23.6, "hb": 0.6 }
+      ],
+      "deckridge": { "hab": 28.0, "hb": 0.7 }
+    },
+    {
+      "location": 50,
+      "keel": 10.4,
+      "gunwale": { "hab": 23.8, "hb": 8.9 },
+      "chines": [
+        { "hab": 16.9, "hb": 5.4 },
+        { "hab": 18.5, "hb": 6.5 },
+        { "hab": 20.0, "hb": 7.5 },
+        { "hab": 21.8, "hb": 8.3 }
+      ],
+      "deckridge": { "hab": 31.0, "hb": 0.7 }
+    },
+    {
+      "location": 100,
+      "keel": 6.5,
+      "gunwale": { "hab": 22.4, "hb": 15.4 },
+      "chines": [
+        { "hab": 11.8, "hb": 8.6 },
+        { "hab": 13.8, "hb": 11.2 },
+        { "hab": 16.4, "hb": 13.3 },
+        { "hab": 19.2, "hb": 14.5 }
+      ],
+      "deckridge": { "hab": 31.8, "hb": 0.7 }
+    },
+    {
+      "location": 150,
+      "keel": 4.4,
+      "gunwale": { "hab": 21.5, "hb": 20.5 },
+      "chines": [
+        { "hab": 8.9, "hb": 11.0 },
+        { "hab": 10.8, "hb": 15.0 },
+        { "hab": 13.7, "hb": 17.9 },
+        { "hab": 17.3, "hb": 19.7 }
+      ],
+      "deckridge": { "hab": 32.5, "hb": 0.7 }
+    },
+    {
+      "location": 200,
+      "keel": 3.9,
+      "gunwale": { "hab": 21.5, "hb": 23.7 },
+      "chines": [
+        { "hab": 8.2, "hb": 12.5 },
+        { "hab": 10.2, "hb": 16.9 },
+        { "hab": 13.2, "hb": 20.1 },
+        { "hab": 17.0, "hb": 22.3 }
+      ],
+      "deckridge": { "hab": 33.6, "hb": 0.7 }
+    },
+    {
+      "location": 250,
+      "keel": 3.3,
+      "gunwale": { "hab": 21.2, "hb": 25.2 },
+      "chines": [
+        { "hab": 7.2, "hb": 13.6 },
+        { "hab": 9.0, "hb": 18.2 },
+        { "hab": 12.2, "hb": 21.8 },
+        { "hab": 16.2, "hb": 24.0 }
+      ],
+      "deckridge": { "hab": 33.4, "hb": 1.0 }
+    },
+    {
+      "location": 300,
+      "keel": 3.4,
+      "gunwale": { "hab": 22.2, "hb": 24.7 },
+      "chines": [
+        { "hab": 7.3, "hb": 13.5 },
+        { "hab": 9.3, "hb": 18.3 },
+        { "hab": 12.8, "hb": 21.5 },
+        { "hab": 17.3, "hb": 23.5 }
+      ],
+      "deckridge": { "hab": 35.1, "hb": 18.8 }
+    },
+    {
+      "location": 350,
+      "keel": 4.0,
+      "gunwale": { "hab": 22.7, "hb": 22.4 },
+      "chines": [
+        { "hab": 8.4, "hb": 12.7 },
+        { "hab": 10.7, "hb": 17.0 },
+        { "hab": 14.2, "hb": 19.8 },
+        { "hab": 18.2, "hb": 21.5 }
+      ],
+      "deckridge": { "hab": 33.5, "hb": 0.7 }
+    },
+    {
+      "location": 400,
+      "keel": 5.0,
+      "gunwale": { "hab": 22.9, "hb": 19.3 },
+      "chines": [
+        { "hab": 9.4, "hb": 11.3 },
+        { "hab": 11.8, "hb": 14.9 },
+        { "hab": 15.2, "hb": 17.2 },
+        { "hab": 18.9, "hb": 18.7 }
+      ],
+      "deckridge": { "hab": 33.5, "hb": 0.7 }
+    },
+    {
+      "location": 450,
+      "keel": 7.1,
+      "gunwale": { "hab": 24.1, "hb": 14.7 },
+      "chines": [
+        { "hab": 12.3, "hb": 8.6 },
+        { "hab": 14.8, "hb": 11.1 },
+        { "hab": 17.8, "hb": 12.8 },
+        { "hab": 20.6, "hb": 13.8 }
+      ],
+      "deckridge": { "hab": 33.4, "hb": 0.7 }
+    },
+    {
+      "location": 475,
+      "keel": 8.4,
+      "gunwale": { "hab": 25.5, "hb": 12.1 },
+      "chines": [
+        { "hab": 14.2, "hb": 6.8 },
+        { "hab": 16.6, "hb": 8.8 },
+        { "hab": 19.1, "hb": 10.2 },
+        { "hab": 21.6, "hb": 11.3 }
+      ],
+      "deckridge": { "hab": 33.5, "hb": 0.9 }
+    },
+    {
+      "location": 500,
+      "keel": 9.3,
+      "gunwale": { "hab": 0, "hb": 0 },
+      "chines": [
+        { "hab": 13.4, "hb": 0.9 },
+        { "hab": 0, "hb": 0 },
+        { "hab": 0, "hb": 0 },
+        { "hab": 0, "hb": 0 }
+      ],
+      "deckridge": { "hab": 30.7, "hb": 0.8 }
+    },
+    {
+      "location": 525,
+      "keel": 10.0,
+      "gunwale": { "hab": 0, "hb": 0 },
+      "chines": [
+        { "hab": 0, "hb": 0 },
+        { "hab": 0, "hb": 0 },
+        { "hab": 0, "hb": 0 },
+        { "hab": 0, "hb": 0 }
+      ],
+      "deckridge": { "hab": 27.6, "hb": 0.8 }
+    }
+  ]
+}

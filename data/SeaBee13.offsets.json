@@ -1,0 +1,61 @@
+{
+  "name": "Sea Bee 13",
+  "units": "mm",
+  "stations": [
+    {
+      "location": 609.6,
+      "keel": 46.6,
+      "gunwale": { "hab": 248.1, "hb": 158.8 },
+      "chines": [
+        { "hab": 70.4, "hb": 55.8 },
+        { "hab": 103.9, "hb": 101.5 },
+        { "hab": 148.1, "hb": 124.1 }
+      ],
+      "deckridge": { "hab": 287.4, "hb": 0 }
+    },
+    {
+      "location": 1219.2,
+      "keel": 14.6,
+      "gunwale": { "hab": 217.6, "hb": 259.7 },
+      "chines": [
+        { "hab": 32.0, "hb": 127.4 },
+        { "hab": 63.7, "hb": 199.3 },
+        { "hab": 113.7, "hb": 227.1 }
+      ],
+      "deckridge": { "hab": 282.9, "hb": 0 }
+    },
+    {
+      "location": 1767.84,
+      "keel": 1.2,
+      "gunwale": { "hab": 201.5, "hb": 301.1 },
+      "chines": [
+        { "hab": 14.9, "hb": 156.7 },
+        { "hab": 45.1, "hb": 239.3 },
+        { "hab": 97.2, "hb": 269.1 }
+      ],
+      "deckridge": { "hab": 278.9, "hb": 61.0 }
+    },
+    {
+      "location": 2529.84,
+      "keel": 5.5,
+      "gunwale": { "hab": 197.5, "hb": 281.6 },
+      "chines": [
+        { "hab": 17.4, "hb": 143.3 },
+        { "hab": 46.9, "hb": 220.7 },
+        { "hab": 97.2, "hb": 249.3 }
+      ],
+      "deckridge": { "hab": 197.5, "hb": 0 }
+    },
+    {
+      "location": 3200.4,
+      "keel": 29.6,
+      "gunwale": { "hab": 210.6, "hb": 189.6 },
+      "chines": [
+        { "hab": 43.3, "hb": 82.3 },
+        { "hab": 74.1, "hb": 135.6 },
+        { "hab": 118.3, "hb": 158.5 }
+      ],
+      "deckridge": { "hab": 210.6, "hb": 0 }
+    }
+  ]
+}

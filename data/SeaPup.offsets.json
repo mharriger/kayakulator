@@ -1,0 +1,78 @@
+{
+  "name": "Sea Pup",
+  "units": "feet",
+  "stations": [
+    {
+      "location": 0.0,
+      "keel": 0.009,
+      "chines": [
+        { "hab": 0.000, "hb": 0.000 }
+      ],
+      "gunwale": { "hab": 0.800, "hb": 0.000 },
+      "deckridge": { "hab": 0.800, "hb": 0.000 }
+    },
+    {
+      "location": 2.5,
+      "keel": 0.092,
+      "chines": [
+        { "hab": 0.193, "hb": 0.215 }
+      ],
+      "gunwale": { "hab": 0.581, "hb": 0.682 },
+      "deckridge": { "hab": 0.581, "hb": 0.000 }
+    },
+    {
+      "location": 4.4583,
+      "keel": 0.029,
+      "chines": [
+        { "hab": 0.129, "hb": 0.511 }
+      ],
+      "gunwale": { "hab": 0.581, "hb": 0.682 },
+      "deckridge": { "hab": 0.659, "hb": 0.450 }
+    },
+    {
+      "location": 6.6667,
+      "keel": 0.033,
+      "chines": [
+        { "hab": 0.100, "hb": 0.642 }
+      ],
+      "gunwale": { "hab": 0.538, "hb": 0.789 },
+      "deckridge": { "hab": 0.800, "hb": 0.250 }
+    },
+    {
+      "location": 8.5,
+      "keel": 0.009,
+      "chines": [
+        { "hab": 0.110, "hb": 0.600 }
+      ],
+      "gunwale": { "hab": 0.539, "hb": 0.753 },
+      "deckridge": { "hab": 0.539, "hb": 0.000 }
+    },
+    {
+      "location": 9.875,
+      "keel": 0.033,
+      "chines": [
+        { "hab": 0.135, "hb": 0.482 }
+      ],
+      "gunwale": { "hab": 0.560, "hb": 0.652 },
+      "deckridge": { "hab": 0.560, "hb": 0.000 }
+    },
+    {
+      "location": 11.5,
+      "keel": 0.081,
+      "chines": [
+        { "hab": 0.185, "hb": 0.252 }
+      ],
+      "gunwale": { "hab": 0.607, "hb": 0.450 },
+      "deckridge": { "hab": 0.607, "hb": 0.000 }
+    },
+    {
+      "location": 14.0,
+      "keel": 0.240,
+      "chines": [
+        { "hab": 0.240, "hb": 0.000 }
+      ],
+      "gunwale": { "hab": 0.722, "hb": 0.000 },
+      "deckridge": { "hab": 0.722, "hb": 0.000 }
+    }
+  ]
+}

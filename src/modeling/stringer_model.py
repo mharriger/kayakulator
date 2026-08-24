@@ -59,7 +59,7 @@ class StringerModel(ABC):
         return self._profile
 
     @profile.setter
-    def profile(self, value: TopoDS_Shape):
+    def profile(self, value: StringerProfile):
         self._profile = value
         self._solid = None # Invalidate the pipe so it will be regenerated with the new profile
 
@@ -80,8 +80,13 @@ class StringerModel(ABC):
             raise RuntimeError("Profile not set, cannot make pipe")
         if self._solid:
             return trim_shape_with_plane(self._solid.shape, self._get_trim_plane(), gp_Pnt(-1,0,0)) if self._get_trim_plane() else self._solid.shape
-        # Get the tangent vector at the start of the curve
         self._solid = StringerSolid()
+
+        self._generate_solid()
+          
+        return trim_shape_with_plane(self._solid.shape, self._get_trim_plane(), gp_Pnt(-1,0,0)) if self._get_trim_plane() else self._solid.shape
+
+    def _generate_solid(self):
         for base_geom in self.base_geometry:
             props = None
             edge = None
@@ -97,28 +102,49 @@ class StringerModel(ABC):
                 props = GeomLProp_CLProps(curve3d, curve3d.FirstParameter(), 1, 1e-6)
             # The spine for the sweep operation
             w = BRepBuilderAPI_MakeWire()
-            # Get the tangent to the start of the curve
-            tangent = gp_Dir()
-            props.Tangent(tangent)
             if not edge:
                 edge = BRepBuilderAPI_MakeEdge(curve3d).Edge()
             w.Add(edge)
-            loc = gp_Pnt()
-            curve3d.D0(0, loc)
-            pos = gp_Ax2(loc, tangent)
-            # Place the shape on the plane with its X axis oriented to the normal of the curve
-            # The curve normal at the endpoint is perpendicular to the tangent in the stringer plane
-            perp = construct_perpendicular_in_plane(self._surface, gp_Lin(pos.Axis()), loc)
-            pos.SetXDirection(perp.Direction().Reversed())
-            trsf = gp_Trsf()
-            # Maps standard global axes (0,0,0) to target coordinate system
-            trsf.SetTransformation(gp_Ax3(pos), gp_Ax3())
+            # Compute the transform for placing the profile at the curve start
+            trsf = self._compute_profile_transform(curve3d, props)
             profile = self._profile.transformed(trsf)
 
-            self._solid.add_segment(w.Wire(), profile)
-            
-        return trim_shape_with_plane(self._solid.shape, self._get_trim_plane(), gp_Pnt(-1,0,0)) if self._get_trim_plane() else self._solid.shape
-        
+            self._solid.add_segment(w.Wire(), profile)    
+
+    def _compute_profile_transform(self, curve3d, props=None):
+        """
+        Compute and return a `gp_Trsf` that maps the standard global axes
+        to the target coordinate system at the start of `curve3d`.
+
+        `props` can be a precomputed `GeomLProp_CLProps` for the curve; if
+        not provided it will be constructed here.
+        """
+        if props is None:
+            # If curve3d is an adaptor (has .Curve()), extract the underlying Geom_Curve
+            if hasattr(curve3d, "Curve"):
+                geom_curve = curve3d.Curve()
+                param = curve3d.FirstParameter()
+            else:
+                geom_curve = curve3d
+                param = curve3d.FirstParameter()
+            props = GeomLProp_CLProps(geom_curve, param, 1, 1e-6)
+        # Get the tangent to the start of the curve
+        tangent = gp_Dir()
+        props.Tangent(tangent)
+        loc = gp_Pnt()
+        # Use underlying Geom_Curve for D0 if available
+        if hasattr(curve3d, "Curve"):
+            curve3d.Curve().D0(0, loc)
+        else:
+            curve3d.D0(0, loc)
+        pos = gp_Ax2(loc, tangent)
+        # Place the shape on the plane with its X axis oriented to the normal of the curve
+        perp = construct_perpendicular_in_plane(self._surface, gp_Lin(pos.Axis()), loc)
+        pos.SetYDirection(perp.Direction().Reversed())
+        trsf = gp_Trsf()
+        # Maps standard global axes (0,0,0) to target coordinate system
+        trsf.SetTransformation(gp_Ax3(pos), gp_Ax3())
+        return trsf
     
     @property
     def wires(self) -> list[TopoDS_Wire]:
@@ -138,6 +164,11 @@ class StringerModel(ABC):
             v1, v2 = topo.vertices()
         return [w.Wire()]
     
+    def get_faces_by_role(self, role):
+        if not self._solid:
+            self.solid
+        return self._solid.semantic_topology.face_roles[role]
+        
     def get_x_z_at_y(self, y: float):
         """
         Get the x,y coordinate of the stringer at a specific z coordinate.

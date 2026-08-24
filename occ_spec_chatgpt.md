@@ -103,7 +103,7 @@ Geom_BSplineCurve(
 Fit best-fit plane using least squares:
 
 ```python
-from OCC.Core.GProp import GProp_PEquation
+from OCP.GProp import GProp_PEquation
 
 peq = GProp_PEquation()
 for p in control_points:

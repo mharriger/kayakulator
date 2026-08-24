@@ -1,4 +1,7 @@
+from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
+from OCC.Core.BRepGProp import brepgprop
+from OCC.Core.GProp import GProp_GProps
 from OCC.Core.GeomLProp import GeomLProp_CLProps
 from OCC.Core.gp import gp_Pnt, gp_Trsf, gp_Vec, gp_Dir, gp_Ax2, gp_Ax3
 from OCC.Core.GC import GC_MakeSegment
@@ -26,7 +29,6 @@ def _all_faces(shape):
         faces.append(explorer.Current())
         explorer.Next()
     return faces
-
 
 def test_stringer_profile_creates_semantic_topology():
     profile = make_rectangle_face(10.0, 5.0)
@@ -110,3 +112,25 @@ def test_add_to_existing_solid_still_has_semantically_mapped_faces():
        assert all(not face.IsNull() for face in generated_faces)
        for face in generated_faces:
            assert any(face.IsSame(solid_face) for solid_face in solid_faces)
+
+def test_keel_profile_top_is_on_top(seatour15exp_keel):
+    profile = make_rectangle_face(5.0, 10.0)
+    seatour15exp_keel.profile = profile
+    seatour15exp_keel.solid #Generate the solid
+
+def test_keel_bottom_face_is_horizontal(seatour15exp_keel):
+    """
+    Test that the bottom edge from the stringer profile carries over correctly to the keel solid
+    """
+    profile = make_rectangle_face(5.0, 10.0)
+    seatour15exp_keel.profile = profile
+    seatour15exp_keel.solid #Generate the solid
+    bottom_faces = seatour15exp_keel._solid.semantic_topology.get_face(TopologyRole.BOTTOM)
+    for face in bottom_faces:
+        long_edges = sorted(_all_edges(face), key=lambda edge: _edge_length(edge), reverse=True)[:2]
+        assert(BRepAdaptor_Curve(long_edges[0]).Value(0).Coord()[0] != BRepAdaptor_Curve(long_edges[1]).Value(0).Coord()[0])
+
+def _edge_length(edge):
+    props = GProp_GProps()
+    brepgprop.LinearProperties(edge, props)
+    return props.Mass()

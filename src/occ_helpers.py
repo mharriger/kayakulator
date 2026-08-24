@@ -4,6 +4,11 @@ from OCC.Core.gp import gp_Pnt2d
 from OCC.Core.TColgp import TColgp_Array1OfPnt2d
 from OCC.Core.Geom2d import Geom2d_BSplineCurve
 
+from OCC.Core.BRep import BRep_Tool
+from OCC.Core.TopExp import topexp
+from OCC.Core.TopoDS import TopoDS_Iterator
+
+
 from Bspline import Bspline
 
 def print_plane_coefficients(plane: gp_Pln) -> None:
@@ -48,3 +53,30 @@ def bspline_to_occ_bspline(spline: Bspline) -> Geom2d_BSplineCurve:
     bspline_curve = Geom2d_BSplineCurve(poles, knots, multiplicities, spline.degree)
     return bspline_curve
 
+def iterate_topexp(topexp_obj):
+    """Yields items from an object with a .More(), .Value(), .Next() interface"""
+    while topexp_obj.More():
+        yield topexp_obj.Value()
+        topexp_obj.Next()
+
+def print_edge_vertex_coordinates(edge):
+  # Get the first and last vertices based on edge orientation
+  v1 = topexp.FirstVertex(edge)
+  v2 = topexp.LastVertex(edge)
+
+  # Extract gp_Pnt geometry from vertices
+  p1 = BRep_Tool.Pnt(v1)
+  p2 = BRep_Tool.Pnt(v2)
+
+  # Print the coordinates
+  print(f'First Vertex: ({p1.X()}, {p1.Y()}, {p1.Z()})')
+  print(f'Last Vertex:  ({p2.X()}, {p2.Y()}, {p2.Z()})')
+
+def get_shapes_from_compound(compound_shape):
+    shapes = []
+    # Initialize the iterator for the compound shape
+    it = TopoDS_Iterator(compound_shape)
+    while it.More():
+        shapes.append(it.Value())
+        it.Next()
+    return shapes

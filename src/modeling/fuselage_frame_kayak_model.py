@@ -10,17 +10,22 @@ from modeling.keel_model import KeelModel
 from modeling.deckridge_model import DeckridgeModel
 from modeling.frame_model import FrameModel, FrameModelBuilder
 from modeling.stringer_profile import StringerProfile
+from modeling.semantic_topology import TopologyRole
 from offsets.member import Member, chine, frame, KEEL, GUNWALE, DECKRIDGE
 from offsets.offset_table import OffsetTable
 from .geom_functions import intersect_shape_with_plane, mirror_2d_points, trim_shape_with_plane, YZ_PLANE, make_wire_from_points
-from OCC.Core.TopoDS import TopoDS_Shape
+from OCC.Core.TopoDS import TopoDS_Shape, TopoDS_Compound
 from OCC.Core.gp import gp_Pln, gp_Pnt, gp_Dir, gp_Pnt2d, gp_Vec, gp_Lin
 from OCC.Core.TopExp import TopExp_Explorer
 from OCC.Core.TopAbs import TopAbs_EDGE
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
 from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+from OCC.Core.TopExp import topexp
+from OCC.Core.BRep import BRep_Tool
 from OCC.Core.GeomAbs import GeomAbs_Intersection
+
+from occ_helpers import get_shapes_from_compound
 
 import builtins
 from PySide6.QtWidgets import QApplication
@@ -167,43 +172,59 @@ class FuselageFrameKayakModelBuilder(KayakModelBuilder):
                 lin_ang_dict = defaultdict(list)
                 pln = gp_Pln(gp_Pnt(0,fpos_adj,0), gp_Dir(0,1,0))
                 pln_line = self._model.members[member].intersect_surface_with_plane(pln)
-                stringer_solid: TopoDS_Shape = stringer.solid
-                isect_shape = intersect_shape_with_plane(trim_shape_with_plane(stringer_solid, YZ_PLANE, gp_Pnt(-1,0,0)), pln)
+                #stringer_solid: TopoDS_Shape = stringer.solid
+                stringer_solid: TopoDS_Shape = stringer.get_faces_by_role(TopologyRole.OUTER)
+                isect_shapes = []
+                for shape in stringer_solid:
+#TODO: For the keel, trim_shape_with_plane is leaving us with nothing. Why is the keel on the wrong side of the plane now?
+                    iss = intersect_shape_with_plane(trim_shape_with_plane(shape, YZ_PLANE, gp_Pnt(-1,0,0)), pln)
+                    if iss:
+                        if type(iss) == TopoDS_Compound:
+                            isect_shapes.extend(get_shapes_from_compound(iss))
+                        else:
+                            isect_shapes.append(iss)
+                if len(isect_shapes) > 1:
+                    raise RuntimeError("Multiple intersections for stringer with frame plane")
+                isect_shape = isect_shapes[0]
                 if not isect_shape:
                     pt1 = gp_Pnt(self._offset_table.get_offset(frame_idx, member).x - 1, fpos, self._offset_table.get_offset(frame_idx, member).z)
                     pt2 = gp_Pnt(self._offset_table.get_offset(frame_idx, member).x + 1, fpos, self._offset_table.get_offset(frame_idx, member).z)
                     builder.add_exterior_segment(member, pt1, pt2)
                     continue
-                explorer = TopExp_Explorer()
-                explorer.Init(isect_shape, TopAbs_EDGE)
-                while explorer.More():
-                    edge = explorer.Current()
-                    adaptor = BRepAdaptor_Curve(edge)
-                    p_start = gp_Pnt()
-                    p_end = gp_Pnt()
-                    adaptor.D0(adaptor.FirstParameter(), p_start)
-                    adaptor.D0(adaptor.LastParameter(), p_end)
-                    gp_Vec(p_start, p_end)
-                    angle = round(pln_line.Angle(gp_Lin(p_start, gp_Dir(p_start.XYZ() - p_end.XYZ()))), 2) % 3.14
-                    lin_ang_dict[angle].append([p_start, p_end])
-                    explorer.Next()
-                angles = sorted(lin_ang_dict.keys(), reverse=True)
-                most_perp_lines = []
-                for angle in angles:
-                    most_perp_lines.extend(lin_ang_dict[angle])
-                coord_to_check = 0
-                if member in (KEEL, DECKRIDGE):
-                    coord_to_check = 2
-                multiplier = 1
-                if member == KEEL:
-                    multiplier = -1
-                if len(most_perp_lines) > 1:
-                    if most_perp_lines[0][0].Coord()[coord_to_check] * multiplier > most_perp_lines[1][0].Coord()[coord_to_check] * multiplier:
-                        pt1, pt2 = most_perp_lines[0]
-                    else:
-                        pt1, pt2 = most_perp_lines[1]
-                else:
-                    pt1, pt2 = most_perp_lines[0]
+                v1 = topexp.FirstVertex(isect_shape)
+                v2 = topexp.LastVertex(isect_shape)
+                pt1 = BRep_Tool.Pnt(v1)
+                pt2 = BRep_Tool.Pnt(v2)
+                #explorer = TopExp_Explorer()
+                #explorer.Init(isect_shape, TopAbs_EDGE)
+                #while explorer.More():
+                #    edge = explorer.Current()
+                #    adaptor = BRepAdaptor_Curve(edge)
+                #    p_start = gp_Pnt()
+                #    p_end = gp_Pnt()
+                #    adaptor.D0(adaptor.FirstParameter(), p_start)
+                #    adaptor.D0(adaptor.LastParameter(), p_end)
+                #    gp_Vec(p_start, p_end)
+                #    angle = round(pln_line.Angle(gp_Lin(p_start, gp_Dir(p_start.XYZ() - p_end.XYZ()))), 2) % 3.14
+                #    lin_ang_dict[angle].append([p_start, p_end])
+                #    explorer.Next()
+                #angles = sorted(lin_ang_dict.keys(), reverse=True)
+                #most_perp_lines = []
+                #for angle in angles:
+                #    most_perp_lines.extend(lin_ang_dict[angle])
+                #coord_to_check = 0
+                #if member in (KEEL, DECKRIDGE):
+                #    coord_to_check = 2
+                #multiplier = 1
+                #if member == KEEL:
+                #    multiplier = -1
+                #if len(most_perp_lines) > 1:
+                #    if most_perp_lines[0][0].Coord()[coord_to_check] * multiplier > most_perp_lines[1][0].Coord()[coord_to_check] * multiplier:
+                #        pt1, pt2 = most_perp_lines[0]
+                #    else:
+                #        pt1, pt2 = most_perp_lines[1]
+                #else:
+                #    pt1, pt2 = most_perp_lines[0]
                 if pt1.Coord()[0] < pt2.Coord()[0]:
                     pt1, pt2 = pt2, pt1
                 if member == DECKRIDGE:

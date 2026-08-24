@@ -325,6 +325,7 @@ class MainWindow(QMainWindow):
         drawer.SetFaceBoundaryAspect(line_aspect)
         drawer.SetColor(self._get_member_color(member))
         self._current_document.member_shapes.setdefault(member, {})["solid"] = [shape]
+        self._current_document.member_shapes.setdefault(member, {})["curve"] = [self.display_wire(frame_model._exterior_wire, Quantity_Color(Quantity_NOC_BLACK)), self.display_wire(frame_model._interior_wire, Quantity_Color(Quantity_NOC_BLACK))]
 
     def _set_shapes_visibility(self, member, category, visible: bool):
         if self._current_document is None:
@@ -382,7 +383,7 @@ class MainWindow(QMainWindow):
             if hasattr(member, 'remodel'):
                 member.remodel()
             if member and member in self._current_document.model.stringers:
-                self._current_document.model.stringers[member].profile_shape = make_profile_shape(self._current_document.member_properties[member].profile_shape)
+                self._current_document.model.stringers[member].profile = make_profile_shape(self._current_document.member_properties[member].profile_shape)
             # TODO: Only remove/redraw the affected stringer(s) instead of everything
             for shape in self._current_document.member_shapes.get(member, {}).get("solid", []):
                 self.display.Context.Remove(shape, False)

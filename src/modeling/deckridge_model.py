@@ -10,6 +10,8 @@ from OCC.Core.BRep import BRep_Tool_Pnt
 from .geom_functions import segment_polyline_near_straight, LineSegment, mirror_shape_across_yz_plane, YZ_PLANE
 
 from modeling.stringer_model import StringerModel
+from .stringer_profile import StringerProfile
+from .semantic_topology import TopologyRole
 
 FRAME_FINDING_TOLERENCE = 50
 
@@ -73,6 +75,15 @@ class DeckridgeModel(StringerModel):
         for geom in self._geometry_list:
             wlist.append(BRepBuilderAPI_MakeWire(geom).Wire())
         return wlist
+
+    @StringerModel.profile.setter
+    def profile(self, profile: StringerProfile):
+        for edge in profile.semantic_topology.get_edge(TopologyRole.TOP):
+            profile.semantic_topology.set_edge_role(edge, TopologyRole.OUTER)
+        for edge in profile.semantic_topology.get_edge(TopologyRole.BOTTOM):
+            profile.semantic_topology.set_edge_role(edge, TopologyRole.INNER) 
+        # Call the parent's setter using .fset()
+        StringerModel.profile.fset(self, profile)
 
     def remodel(self):
         """
