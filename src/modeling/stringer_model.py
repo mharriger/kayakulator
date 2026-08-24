@@ -35,12 +35,6 @@ class StringerModel(ABC):
         self._profile: StringerProfile = None
         self._solid: StringerSolid
 
-        # TODO: References to the faces of the solid (top, bottom, left, right, inner, outer as appropriate)
-        # Do we need a class to wrap a solid?
-        # Give the solid a spine and a profile object which has named edges, each named edge makes a named face?
-        # Maybe the faces aren't named per se, but they have properties that allow them to be identified.
-        # A single face may be both top and inside, for example.
-
     @property
     @abstractmethod
     def base_geometry(self) -> Iterable:
@@ -80,10 +74,9 @@ class StringerModel(ABC):
             raise RuntimeError("Profile not set, cannot make pipe")
         if self._solid:
             return trim_shape_with_plane(self._solid.shape, self._get_trim_plane(), gp_Pnt(-1,0,0)) if self._get_trim_plane() else self._solid.shape
-        self._solid = StringerSolid()
 
+        self._solid = StringerSolid()
         self._generate_solid()
-          
         return trim_shape_with_plane(self._solid.shape, self._get_trim_plane(), gp_Pnt(-1,0,0)) if self._get_trim_plane() else self._solid.shape
 
     def _generate_solid(self):
@@ -119,14 +112,13 @@ class StringerModel(ABC):
         `props` can be a precomputed `GeomLProp_CLProps` for the curve; if
         not provided it will be constructed here.
         """
+        param = curve3d.FirstParameter()
         if props is None:
             # If curve3d is an adaptor (has .Curve()), extract the underlying Geom_Curve
             if hasattr(curve3d, "Curve"):
                 geom_curve = curve3d.Curve()
-                param = curve3d.FirstParameter()
             else:
                 geom_curve = curve3d
-                param = curve3d.FirstParameter()
             props = GeomLProp_CLProps(geom_curve, param, 1, 1e-6)
         # Get the tangent to the start of the curve
         tangent = gp_Dir()
@@ -134,13 +126,15 @@ class StringerModel(ABC):
         loc = gp_Pnt()
         # Use underlying Geom_Curve for D0 if available
         if hasattr(curve3d, "Curve"):
-            curve3d.Curve().D0(0, loc)
+            curve3d.Curve().D0(param, loc)
         else:
-            curve3d.D0(0, loc)
-        pos = gp_Ax2(loc, tangent)
-        # Place the shape on the plane with its X axis oriented to the normal of the curve
-        perp = construct_perpendicular_in_plane(self._surface, gp_Lin(pos.Axis()), loc)
-        pos.SetYDirection(perp.Direction().Reversed())
+            curve3d.D0(param, loc)
+        A = self._surface.Axis().Direction() # Normal to the chine plane
+        B = tangent # Tangent to the curve
+        C = A.Crossed(B) # Binormal of the curve
+        pos = gp_Ax2(loc, A)
+        pos.SetXDirection(C)
+        pos.SetYDirection(B)
         trsf = gp_Trsf()
         # Maps standard global axes (0,0,0) to target coordinate system
         trsf.SetTransformation(gp_Ax3(pos), gp_Ax3())

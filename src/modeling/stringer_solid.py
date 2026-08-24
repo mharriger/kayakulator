@@ -26,7 +26,8 @@ class StringerSolid:
     @staticmethod
     def make_from_profile(spine: TopoDS_Wire, profile: StringerProfile):
         pipe_maker = BRepOffsetAPI_MakePipeShell(spine)
-        pipe_maker.Add(profile.wire, False, True)
+        pipe_maker.SetMode(True)
+        pipe_maker.Add(profile.wire, False, False)
         pipe_maker.Build()
         pipe_maker.MakeSolid()
         pipe = pipe_maker.Shape()

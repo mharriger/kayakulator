@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Self
+from typing import Self, List
 from collections import defaultdict
 from itertools import chain
 
@@ -169,14 +169,11 @@ class FuselageFrameKayakModelBuilder(KayakModelBuilder):
                 pt1 = gp_Pnt(0, fpos, offset.hab)
                 pt2 = gp_Pnt(offset.hb, fpos, offset.hab)
             else:
-                lin_ang_dict = defaultdict(list)
                 pln = gp_Pln(gp_Pnt(0,fpos_adj,0), gp_Dir(0,1,0))
-                pln_line = self._model.members[member].intersect_surface_with_plane(pln)
-                #stringer_solid: TopoDS_Shape = stringer.solid
-                stringer_solid: TopoDS_Shape = stringer.get_faces_by_role(TopologyRole.OUTER)
+                outer_faces: List[TopoDS_Shape] = stringer.get_faces_by_role(TopologyRole.OUTER)
                 isect_shapes = []
-                for shape in stringer_solid:
-#TODO: For the keel, trim_shape_with_plane is leaving us with nothing. Why is the keel on the wrong side of the plane now?
+                for shape in outer_faces:
+                #TODO: For the keel, trim_shape_with_plane is leaving us with nothing. Why is the keel on the wrong side of the plane now?
                     iss = intersect_shape_with_plane(trim_shape_with_plane(shape, YZ_PLANE, gp_Pnt(-1,0,0)), pln)
                     if iss:
                         if type(iss) == TopoDS_Compound:
@@ -195,36 +192,6 @@ class FuselageFrameKayakModelBuilder(KayakModelBuilder):
                 v2 = topexp.LastVertex(isect_shape)
                 pt1 = BRep_Tool.Pnt(v1)
                 pt2 = BRep_Tool.Pnt(v2)
-                #explorer = TopExp_Explorer()
-                #explorer.Init(isect_shape, TopAbs_EDGE)
-                #while explorer.More():
-                #    edge = explorer.Current()
-                #    adaptor = BRepAdaptor_Curve(edge)
-                #    p_start = gp_Pnt()
-                #    p_end = gp_Pnt()
-                #    adaptor.D0(adaptor.FirstParameter(), p_start)
-                #    adaptor.D0(adaptor.LastParameter(), p_end)
-                #    gp_Vec(p_start, p_end)
-                #    angle = round(pln_line.Angle(gp_Lin(p_start, gp_Dir(p_start.XYZ() - p_end.XYZ()))), 2) % 3.14
-                #    lin_ang_dict[angle].append([p_start, p_end])
-                #    explorer.Next()
-                #angles = sorted(lin_ang_dict.keys(), reverse=True)
-                #most_perp_lines = []
-                #for angle in angles:
-                #    most_perp_lines.extend(lin_ang_dict[angle])
-                #coord_to_check = 0
-                #if member in (KEEL, DECKRIDGE):
-                #    coord_to_check = 2
-                #multiplier = 1
-                #if member == KEEL:
-                #    multiplier = -1
-                #if len(most_perp_lines) > 1:
-                #    if most_perp_lines[0][0].Coord()[coord_to_check] * multiplier > most_perp_lines[1][0].Coord()[coord_to_check] * multiplier:
-                #        pt1, pt2 = most_perp_lines[0]
-                #    else:
-                #        pt1, pt2 = most_perp_lines[1]
-                #else:
-                #    pt1, pt2 = most_perp_lines[0]
                 if pt1.Coord()[0] < pt2.Coord()[0]:
                     pt1, pt2 = pt2, pt1
                 if member == DECKRIDGE:

@@ -68,9 +68,9 @@ class ChineModel(StringerModel):
 
     @StringerModel.profile.setter
     def profile(self, profile: StringerProfile):
-        for edge in profile.semantic_topology.get_edge(TopologyRole.TOP):
+        for edge in profile.semantic_topology.get_edge(TopologyRole.RIGHT):
             profile.semantic_topology.set_edge_role(edge, TopologyRole.OUTER)
-        for edge in profile.semantic_topology.get_edge(TopologyRole.BOTTOM):
+        for edge in profile.semantic_topology.get_edge(TopologyRole.LEFT):
             profile.semantic_topology.set_edge_role(edge, TopologyRole.INNER) 
         # Call the parent's setter using .fset()
         StringerModel.profile.fset(self, profile)

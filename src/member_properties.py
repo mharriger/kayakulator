@@ -7,21 +7,26 @@ from typing import Literal
 from settings_manager import SettingsManager
 from offsets.member import MemberType, Member
 from dataclasses import asdict
+from modeling.shared_types import x_position, y_position
 
 settings_manager = SettingsManager()
 
 @dataclass(frozen=True)
-class ProfileRectangle:
+class ProfilePropertiesRectangle:
     width: float
     height: float
     shape_type: Literal["rectangle"] = "rectangle"
+    origin_pos_x: x_position = x_position.RIGHT
+    origin_pos_y: y_position = y_position.CENTER
 
 @dataclass(frozen=True)
-class ProfileCircle:
+class ProfilePropertiesCircle:
     radius: float
     shape_type: Literal["circle"] = "circle"
+    origin_pos_x: x_position = x_position.RIGHT
+    origin_pos_y: y_position = y_position.CENTER
 
-ProfileShape = ProfileRectangle | ProfileCircle
+ProfileShapeProperties = ProfilePropertiesRectangle | ProfilePropertiesCircle
 
 @dataclass()
 class MemberProperties:
@@ -31,7 +36,8 @@ class MemberProperties:
 @dataclass()
 class StringerProperties(MemberProperties):
     #TODO: Get default from settings manager
-    profile_shape: ProfileShape | None = ProfileRectangle(width=0.5 * 25.4, height=0.5 * 25.4)
+    
+    profile_shape: ProfileShapeProperties = None
     # Stores the Z values of the endpoints, since those are not fully defined by the offset table
     bow_endpoint_y: float | None = None
     stern_endpoint_y: float | None = None
@@ -49,23 +55,30 @@ def member_properties_factory(member: Member) -> MemberProperties:
     if member.type == MemberType.FRAME:
         return FrameProperties()
     else:
-        return StringerProperties()
+        sm = SettingsManager()
+        ps = ProfilePropertiesRectangle(
+            width=sm.get((member.type, "stringer_width")),
+            height=sm.get((member.type, "stringer_height")),
+            origin_pos_y=sm.get((member.type, "stringer_y_pos")),
+            origin_pos_x=sm.get((member.type, "stringer_x_pos"))
+        )
+        return StringerProperties(profile_shape=ps)
 
 
-def profile_shape_to_dict(shape: ProfileShape) -> dict:
+def profile_shape_to_dict(shape: ProfileShapeProperties) -> dict:
     """Serialize a ProfileShape (ProfileRectangle/ProfileCircle) to dict."""
     return asdict(shape)
 
 
-def profile_shape_from_dict(d: dict) -> ProfileShape:
+def profile_shape_from_dict(d: dict) -> ProfileShapeProperties:
     """Deserialize a ProfileShape from dict."""
     if d is None:
         return None
     t = d.get('shape_type')
     if t == 'rectangle':
-        return ProfileRectangle(width=d['width'], height=d['height'])
+        return ProfilePropertiesRectangle(width=d['width'], height=d['height'])
     if t == 'circle':
-        return ProfileCircle(radius=d['radius'])
+        return ProfilePropertiesCircle(radius=d['radius'])
     raise ValueError(f"Unknown profile shape type: {t}")
 
 

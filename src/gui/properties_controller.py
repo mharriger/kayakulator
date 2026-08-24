@@ -7,7 +7,7 @@ from PySide6.QtGui import QStandardItem
 
 from offsets.member import DECKRIDGE, Member, MemberType
 from kayakulator_document import KayakulatorDocument
-from member_properties import FrameProperties, StringerProperties, ProfileCircle, ProfileRectangle
+from member_properties import FrameProperties, StringerProperties, ProfilePropertiesCircle, ProfilePropertiesRectangle
 
 from .property_definition import PropertyDefinition, PropertyType
 from .properties_model import PropertyAccessor
@@ -313,36 +313,36 @@ class PropertiesController(QObject):
 
         def get_shape_type():
             profile_shape = self._document.member_properties[member].profile_shape
-            return "circle" if isinstance(profile_shape, ProfileCircle) else "rectangle"
+            return "circle" if isinstance(profile_shape, ProfilePropertiesCircle) else "rectangle"
 
         def set_shape_type(value):
             profile_shape = self._document.member_properties[member].profile_shape
             if value == "circle":
-                new_shape = ProfileCircle(radius=profile_shape.radius if isinstance(profile_shape, ProfileCircle) else profile_shape.width / 2)
+                new_shape = ProfilePropertiesCircle(radius=profile_shape.radius if isinstance(profile_shape, ProfilePropertiesCircle) else profile_shape.width / 2)
             else:
-                new_shape = ProfileRectangle(width=profile_shape.radius * 2 if isinstance(profile_shape, ProfileCircle) else profile_shape.width,
-                                             height=profile_shape.height if isinstance(profile_shape, ProfileRectangle) else profile_shape.radius * 2)
+                new_shape = ProfilePropertiesRectangle(width=profile_shape.radius * 2 if isinstance(profile_shape, ProfilePropertiesCircle) else profile_shape.width,
+                                             height=profile_shape.height if isinstance(profile_shape, ProfilePropertiesRectangle) else profile_shape.radius * 2)
             set_profile_shape(new_shape)
 
         def get_radius():
             profile_shape = self._document.member_properties[member].profile_shape
-            return profile_shape.radius if isinstance(profile_shape, ProfileCircle) else profile_shape.width
+            return profile_shape.radius if isinstance(profile_shape, ProfilePropertiesCircle) else profile_shape.width
 
         def set_radius(value):
             profile_shape = self._document.member_properties[member].profile_shape
-            if isinstance(profile_shape, ProfileCircle):
-                set_profile_shape(ProfileCircle(radius=value))
+            if isinstance(profile_shape, ProfilePropertiesCircle):
+                set_profile_shape(ProfilePropertiesCircle(radius=value))
             else:
-                set_profile_shape(ProfileRectangle(width=value, height=profile_shape.height))
+                set_profile_shape(ProfilePropertiesRectangle(width=value, height=profile_shape.height))
 
         def get_height():
             profile_shape = self._document.member_properties[member].profile_shape
-            return 0.0 if isinstance(profile_shape, ProfileCircle) else profile_shape.height
+            return 0.0 if isinstance(profile_shape, ProfilePropertiesCircle) else profile_shape.height
 
         def set_height(value):
             profile_shape = self._document.member_properties[member].profile_shape
-            if isinstance(profile_shape, ProfileRectangle):
-                set_profile_shape(ProfileRectangle(width=profile_shape.width, height=value))
+            if isinstance(profile_shape, ProfilePropertiesRectangle):
+                set_profile_shape(ProfilePropertiesRectangle(width=profile_shape.width, height=value))
 
         return {
             "shape_type": PropertyAccessor(getter=get_shape_type, setter=set_shape_type),
@@ -358,11 +358,11 @@ class PropertiesController(QObject):
         values = {}
         
         # Determine shape type and extract size
-        if isinstance(stringer_props.profile_shape, ProfileCircle):
+        if isinstance(stringer_props.profile_shape, ProfilePropertiesCircle):
             values["shape_type"] = "circle"
             values["radius"] = stringer_props.profile_shape.radius
             values["height"] = 0.0  # N/A for circles
-        elif isinstance(stringer_props.profile_shape, ProfileRectangle):
+        elif isinstance(stringer_props.profile_shape, ProfilePropertiesRectangle):
             values["shape_type"] = "rectangle"
             values["radius"] = stringer_props.profile_shape.width
             values["height"] = stringer_props.profile_shape.height

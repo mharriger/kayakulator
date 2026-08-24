@@ -1,9 +1,10 @@
-from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Dir, gp_Pln, gp_Ax3, gp_Ax2
+from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Dir, gp_Pln, gp_Ax3, gp_Ax2, gp_Trsf
 from OCC.Core.TColgp import TColgp_Array1OfPnt
 from OCC.Core.GCE2d import GCE2d_MakeSegment
 from OCC.Extend.TopologyUtils import TopologyExplorer
 from OCC.Core.BRepGProp import brepgprop_SurfaceProperties
 from OCC.Core.GProp import GProp_GProps
+from OCC.Core.GeomLProp import GeomLProp_CLProps
 
 from minimum_energy_bspline import minimum_energy_bspline
 from occ_helpers import bspline_to_occ_bspline
@@ -46,8 +47,49 @@ class KeelModel(StringerModel):
 
         self.modeling_complete = True
 
+    def _compute_profile_transform(self, curve3d, props=None):
+        """
+        Compute and return a `gp_Trsf` that maps the standard global axes
+        to the target coordinate system at the start of `curve3d`.
+
+        `props` can be a precomputed `GeomLProp_CLProps` for the curve; if
+        not provided it will be constructed here.
+
+        For the keel, we want the height and width of the profile to mean the obvious (global Z and X axes), respectively
+        For the other stringers, we define the Z as the normal of the surface plane, but here that would remap Z to X.
+        So we override this function.
+        """
+        param = curve3d.FirstParameter()
+        if props is None:
+            # If curve3d is an adaptor (has .Curve()), extract the underlying Geom_Curve
+            if hasattr(curve3d, "Curve"):
+                geom_curve = curve3d.Curve()
+            else:
+                geom_curve = curve3d
+            props = GeomLProp_CLProps(geom_curve, param, 1, 1e-6)
+        # Get the tangent to the start of the curve
+        tangent = gp_Dir()
+        props.Tangent(tangent)
+        loc = gp_Pnt()
+        # Use underlying Geom_Curve for D0 if available
+        if hasattr(curve3d, "Curve"):
+            curve3d.Curve().D0(param, loc)
+        else:
+            curve3d.D0(param, loc)
+        A = self._surface.Axis().Direction() # Normal to the chine plane
+        B = tangent # Tangent to the curve
+        C = A.Crossed(B) # Binormal of the curve
+        pos = gp_Ax2(loc, C)
+        pos.SetXDirection(A)
+        pos.SetYDirection(B)
+        trsf = gp_Trsf()
+        # Maps standard global axes (0,0,0) to target coordinate system
+        trsf.SetTransformation(gp_Ax3(pos), gp_Ax3())
+        return trsf
+
     @property
     def base_geometry(self):
+    
         return self._geometry_list
 
     def _get_trim_plane(self):

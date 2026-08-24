@@ -6,8 +6,8 @@ A kayak being processed by the kayakulator.
 from offsets.offset_table import OffsetTable
 from modeling.fuselage_frame_kayak_model import FuselageFrameKayakModelBuilder, FuselageFrameKayakModel
 from modeling.geom_functions import make_profile_shape, x_position, y_position
-from member_properties import ProfileShape, ProfileRectangle, member_properties_factory, MemberProperties, profile_shape_to_dict, profile_shape_from_dict, member_properties_to_dict, member_properties_from_dict
-from offsets.member import Member, GUNWALE, DECKRIDGE, KEEL, frame, MemberType
+from member_properties import ProfileShapeProperties, ProfilePropertiesRectangle, member_properties_factory, MemberProperties, profile_shape_to_dict, profile_shape_from_dict, member_properties_to_dict, member_properties_from_dict
+from offsets.member import Member, GUNWALE, DECKRIDGE, KEEL, frame, MemberType, chine
 from offsets.member import member_to_id, member_from_id
 from OCC.Core.AIS import AIS_Shape
 from settings_manager import SettingsManager
@@ -56,10 +56,10 @@ class KayakulatorDocument:
             # Need to figure out how to get the correct origin position on those then use that profile shape rather than creating a new one
             builder = FuselageFrameKayakModelBuilder() \
                 .set_offsets(self.offsets) \
-                .set_default_profile_shape(make_profile_shape(self.default_profile_shape, origin_pos_y=y_position.BOTTOM, origin_pos_x=x_position.RIGHT)) \
-                .set_stringer_profile(GUNWALE, make_profile_shape(self.default_profile_shape, origin_pos_y=y_position.TOP, origin_pos_x=x_position.RIGHT)) \
-                .set_stringer_profile(DECKRIDGE, make_profile_shape(self.default_profile_shape, origin_pos_x=x_position.CENTER, origin_pos_y=y_position.TOP)) \
-                .set_stringer_profile(KEEL, make_profile_shape(self.default_profile_shape, origin_pos_x=x_position.CENTER, origin_pos_y=y_position.BOTTOM)) \
+                .set_default_profile_shape(make_profile_shape(self.member_properties[chine(0)].profile_shape)) \
+                .set_stringer_profile(GUNWALE, make_profile_shape(self.member_properties[GUNWALE].profile_shape)) \
+                .set_stringer_profile(DECKRIDGE, make_profile_shape(self.member_properties[DECKRIDGE].profile_shape)) \
+                .set_stringer_profile(KEEL, make_profile_shape(self.member_properties[KEEL].profile_shape)) \
                 .setProgressCallback(status_callback)
             for fpos in self.offsets.station_locations.values():
                 builder.add_frame_position(fpos)

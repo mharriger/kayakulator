@@ -5,7 +5,7 @@ Maps StringerProperties data to table columns for widget binding.
 """
 
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
-from member_properties import StringerProperties, ProfileCircle, ProfileRectangle, MemberProperties
+from member_properties import StringerProperties, ProfilePropertiesCircle, ProfilePropertiesRectangle, MemberProperties
 
 
 class StringerPropertiesModel(QAbstractTableModel):
@@ -43,14 +43,14 @@ class StringerPropertiesModel(QAbstractTableModel):
                 return profile.shape_type
 
             elif index.column() == 1:  # radius (as diameter) or width
-                if isinstance(profile, ProfileCircle):
+                if isinstance(profile, ProfilePropertiesCircle):
                     return profile.radius * 2
-                elif isinstance(profile, ProfileRectangle):
+                elif isinstance(profile, ProfilePropertiesRectangle):
                     return profile.width
                 return 0
 
             elif index.column() == 2:  # height
-                if isinstance(profile, ProfileRectangle):
+                if isinstance(profile, ProfilePropertiesRectangle):
                     return profile.height
                 return 0
 
@@ -71,18 +71,18 @@ class StringerPropertiesModel(QAbstractTableModel):
         try:
             if index.column() == 0:
                 if value.lower() == "circle":
-                    new_shape = ProfileCircle(1)
+                    new_shape = ProfilePropertiesCircle(1)
                 else:
-                    new_shape = ProfileRectangle(1, 1)
+                    new_shape = ProfilePropertiesRectangle(1, 1)
                 self._update_properties(new_shape)
             elif index.column() == 1:  # radius or width
                 float_val = float(value)
 
-                if isinstance(profile, ProfileCircle):
+                if isinstance(profile, ProfilePropertiesCircle):
                     # Value is diameter, convert to radius
-                    new_shape = ProfileCircle(radius=float_val / 2)
+                    new_shape = ProfilePropertiesCircle(radius=float_val / 2)
                 else:  # ProfileRectangle
-                    new_shape = ProfileRectangle(width=float_val, height=profile.height)
+                    new_shape = ProfilePropertiesRectangle(width=float_val, height=profile.height)
 
                 self._update_properties(new_shape)
                 self.dataChanged.emit(index, index)
@@ -91,8 +91,8 @@ class StringerPropertiesModel(QAbstractTableModel):
             elif index.column() == 2:  # height
                 float_val = float(value)
 
-                if isinstance(profile, ProfileRectangle):
-                    new_shape = ProfileRectangle(width=profile.width, height=float_val)
+                if isinstance(profile, ProfilePropertiesRectangle):
+                    new_shape = ProfilePropertiesRectangle(width=profile.width, height=float_val)
                     self._update_properties(new_shape)
                     self.dataChanged.emit(index, index)
                     return True

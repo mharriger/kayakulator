@@ -1,13 +1,10 @@
-from OCC.Core.gp import gp_Pnt2d, gp_Pln, gp_Pnt, gp_Dir, gp_Ax3, gp_Ax2
-from OCC.Core.Geom import Geom_Plane
+from OCC.Core.gp import gp_Pln, gp_Pnt, gp_Dir, gp_Ax3, gp_Ax2, gp_Trsf
 from OCC.Core.Geom2d import Geom2d_TrimmedCurve, Geom2d_Line
 from OCC.Core.TopoDS import TopoDS_Wire
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
-from OCC.Core.GeomAPI import geomapi
-from OCC.Core.TopExp import topexp_FirstVertex, topexp_LastVertex
-from OCC.Core.BRep import BRep_Tool_Pnt
+from OCC.Core.GeomLProp import GeomLProp_CLProps
 
-from .geom_functions import segment_polyline_near_straight, LineSegment, mirror_shape_across_yz_plane, YZ_PLANE
+from .geom_functions import segment_polyline_near_straight, LineSegment, mirror_shape_across_yz_plane
 
 from modeling.stringer_model import StringerModel
 from .stringer_profile import StringerProfile
@@ -47,6 +44,46 @@ class DeckridgeModel(StringerModel):
         p1 = extended.Value(u2)
         assert(abs(p1.X() - x) < 1e-6)
         return extended
+
+    def _compute_profile_transform(self, curve3d, props=None):
+        """
+        Compute and return a `gp_Trsf` that maps the standard global axes
+        to the target coordinate system at the start of `curve3d`.
+
+        `props` can be a precomputed `GeomLProp_CLProps` for the curve; if
+        not provided it will be constructed here.
+
+        For the deckridge, we want the height and width of the profile to mean the obvious (global Z and X axes), respectively
+        For the other stringers, we define the Z as the normal of the surface plane, but here that would remap Z to X.
+        So we override this function.
+        """
+        param = curve3d.FirstParameter()
+        if props is None:
+            # If curve3d is an adaptor (has .Curve()), extract the underlying Geom_Curve
+            if hasattr(curve3d, "Curve"):
+                geom_curve = curve3d.Curve()
+            else:
+                geom_curve = curve3d
+            props = GeomLProp_CLProps(geom_curve, param, 1, 1e-6)
+        # Get the tangent to the start of the curve
+        tangent = gp_Dir()
+        props.Tangent(tangent)
+        loc = gp_Pnt()
+        # Use underlying Geom_Curve for D0 if available
+        if hasattr(curve3d, "Curve"):
+            curve3d.Curve().D0(param, loc)
+        else:
+            curve3d.D0(param, loc)
+        A = self._surface.Axis().Direction() # Normal to the chine plane
+        B = tangent # Tangent to the curve
+        C = A.Crossed(B) # Binormal of the curve
+        pos = gp_Ax2(loc, C)
+        pos.SetXDirection(A)
+        pos.SetYDirection(B)
+        trsf = gp_Trsf()
+        # Maps standard global axes (0,0,0) to target coordinate system
+        trsf.SetTransformation(gp_Ax3(pos), gp_Ax3())
+        return trsf
 
     def set_frame_hb_real(self, frame_idx: int, value: bool):
         if value:

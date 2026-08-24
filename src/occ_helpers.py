@@ -7,7 +7,7 @@ from OCC.Core.Geom2d import Geom2d_BSplineCurve
 from OCC.Core.BRep import BRep_Tool
 from OCC.Core.TopExp import topexp
 from OCC.Core.TopoDS import TopoDS_Iterator
-
+from OCC.Extend.TopologyUtils import TopologyExplorer
 
 from Bspline import Bspline
 
@@ -80,3 +80,12 @@ def get_shapes_from_compound(compound_shape):
         shapes.append(it.Value())
         it.Next()
     return shapes
+
+def print_face_vertices(face):
+    topo_exp = TopologyExplorer(face)
+
+    # Iterate through all vertices belonging to this face
+    for vertex in topo_exp.vertices():
+        # Extract the underlying 3D point (gp_Pnt) from the TopoDS_Vertex
+        pnt = BRep_Tool.Pnt(vertex)
+        print(f"Vertex coordinates: X={pnt.X()}, Y={pnt.Y()}, Z={pnt.Z()}")

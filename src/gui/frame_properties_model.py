@@ -5,7 +5,7 @@ Maps FrameProperties data to table columns for widget binding.
 """
 
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
-from member_properties import FrameProperties, StringerProperties, ProfileCircle, ProfileRectangle, MemberProperties
+from member_properties import FrameProperties, StringerProperties, ProfilePropertiesCircle, ProfilePropertiesRectangle, MemberProperties
 
 
 class FramePropertiesModel(QAbstractTableModel):

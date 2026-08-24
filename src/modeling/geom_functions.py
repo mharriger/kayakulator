@@ -1,4 +1,3 @@
-from enum import Enum
 from dataclasses import dataclass, field
 
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Lin, gp_Dir, gp_Dir2d, gp_Pln, gp_Ax1, gp_Ax2, gp_Ax3, gp_Ax2d, gp_Circ, gp_Trsf, gp_Vec
@@ -26,7 +25,7 @@ from OCC.Extend.TopologyUtils import TopologyExplorer
 from attr import dataclass
 import skspatial.objects as skso
 
-from member_properties import ProfileShape
+from modeling.shared_types import ProfileShapeProperties, x_position, y_position
 from modeling.stringer_profile import StringerProfile
 from modeling.semantic_topology import SemanticTopology, TopologyRole
 
@@ -35,16 +34,6 @@ from OCC.Core.TopExp import TopExp_Explorer
 from OCC.Core.TopAbs import TopAbs_EDGE
 
 YZ_PLANE = gp_Pln(gp_Pnt(0,0,0), gp_Dir())
-
-class y_position(Enum):
-    TOP = 1
-    CENTER = 2
-    BOTTOM = 3
-
-class x_position(Enum):
-    LEFT = 1
-    CENTER = 2
-    RIGHT = 3
 
 class LineSegment:
     def __init__(self, start: gp_Pnt, end: gp_Pnt):
@@ -225,9 +214,7 @@ def trimCurveWithCurve(curveToTrim, otherCurve):
         # More than two intersections
         raise ValueError(f"Curve intersection resulted in {num_intersections} points. Expected 0, 1, or 2.")
 
-def make_profile_shape(shapeSpecs: ProfileShape,
-                       origin_pos_x: x_position = x_position.RIGHT,
-                       origin_pos_y: y_position = y_position.CENTER) -> StringerProfile:
+def make_profile_shape(shapeSpecs: ProfileShapeProperties) -> StringerProfile:
     if shapeSpecs.shape_type == "circle":
         face = make_circle_face(shapeSpecs.radius)
         topo_explorer = TopologyExplorer(face)
@@ -241,7 +228,7 @@ def make_profile_shape(shapeSpecs: ProfileShape,
         return StringerProfile(face, semtopo)
         
     elif shapeSpecs.shape_type == "rectangle":
-        return make_rectangle_face(shapeSpecs.width, shapeSpecs.height, origin_pos_x, origin_pos_y)
+        return make_rectangle_face(shapeSpecs.width, shapeSpecs.height, shapeSpecs.origin_pos_x, shapeSpecs.origin_pos_y)
     else:
         raise ValueError(f"Unknown profile shape type: {shapeSpecs.shape_type}")
 
@@ -281,19 +268,20 @@ def make_rectangle_face(width: float,
     if origin_pos_y == y_position.CENTER:
         y_min = -height / 2.0
         y_max = height / 2.0
-    elif origin_pos_y == y_position.TOP:
+    elif origin_pos_y == y_position.BOTTOM:
         y_min = 0.0
         y_max = height
-    elif origin_pos_y == y_position.BOTTOM:
+    elif origin_pos_y == y_position.TOP:
         y_min = -height
         y_max = 0.0
     else:
         raise ValueError(f"Invalid y_position: {origin_pos_y}")
 
-    top_left = BRepBuilderAPI_MakeVertex(gp_Pnt(x_min, y_max, 0)).Vertex()
-    top_right = BRepBuilderAPI_MakeVertex(gp_Pnt(x_max, y_max, 0)).Vertex()
-    bottom_left = BRepBuilderAPI_MakeVertex(gp_Pnt(x_min, y_min, 0)).Vertex()
-    bottom_right = BRepBuilderAPI_MakeVertex(gp_Pnt(x_max, y_min, 0)).Vertex()
+    # Above we act like this is a 2d shape in the XY plane, but we actually want to create it in the XZ plane
+    top_left = BRepBuilderAPI_MakeVertex(gp_Pnt(x_min, 0, y_max)).Vertex()
+    top_right = BRepBuilderAPI_MakeVertex(gp_Pnt(x_max, 0, y_max)).Vertex()
+    bottom_left = BRepBuilderAPI_MakeVertex(gp_Pnt(x_min, 0, y_min)).Vertex()
+    bottom_right = BRepBuilderAPI_MakeVertex(gp_Pnt(x_max, 0, y_min)).Vertex()
 
     top = BRepBuilderAPI_MakeEdge(top_left, top_right).Edge()
     right = BRepBuilderAPI_MakeEdge(top_right, bottom_right).Edge()
