@@ -2,6 +2,8 @@ from PySide6.QtWidgets import(
      QHBoxLayout,
      QLabel,
      QMainWindow,
+     QMenuBar,
+     QMenu,
      QToolBar,
      QFileDialog,
      QErrorMessage,
@@ -56,8 +58,50 @@ class MainWindow(QMainWindow):
         self.canvas = qtDisplay.qtViewer3d(self)
 
         # Add the toolbar
-        self.mainToolbar = MainToolbar(self)
+        self.mainToolbar = QToolBar(self)
+
+        pixmapopen = getattr(QStyle, "SP_DialogOpenButton")
+        iconopen = self.style().standardIcon(pixmapopen)
+
+        pixmapsave = getattr(QStyle, "SP_DialogSaveButton")
+        iconsave = self.style().standardIcon(pixmapsave)
+
+        open_action = QAction(iconopen, "Open...", self, shortcut = QKeySequence.Open)
+        open_action.setStatusTip("Open a kayakulator document")
+        open_action.triggered.connect(self.open_clicked)
+        self.mainToolbar.addAction(open_action)
+
+        save_action = QAction(iconsave, "Save", self, shortcut = QKeySequence.Save)
+        save_action.setStatusTip("Save the current document")
+        save_action.triggered.connect(self.save_clicked)
+        self.mainToolbar.addAction(save_action)
+        
+        save_as_action = QAction("Save &As...", self)
+        save_as_action.setStatusTip("Save the current document to a different file")
+        save_as_action.triggered.connect(self.save_as_clicked)
+
+        import_offsets_action = QAction("&Load...", self)
+        import_offsets_action.setStatusTip("Open an offsets file")
+        import_offsets_action.triggered.connect(self.import_offsets_clicked)
+
+        export_action = QAction("Export STEP...", self)
+        export_action.setStatusTip("Export solid geometry to STEP file")
+        export_action.triggered.connect(self.export_to_step)
+
         self.addToolBar(self.mainToolbar)
+
+        #Menu bar
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("&File")
+        file_menu.addAction(open_action)
+        file_menu.addAction(save_action)
+        file_menu.addAction(save_as_action)
+        file_menu.addSeparator()
+        export_menu = file_menu.addMenu("&Export")
+        export_menu.addAction(export_action)
+
+        offsets_menu = menu_bar.addMenu("&Offsets")
+        offsets_menu.addAction(import_offsets_action)
 
         # Use hbox layout
         self.optionsPanel = OptionsPanel(self)
@@ -99,6 +143,22 @@ class MainWindow(QMainWindow):
         self.setStatusBar(QStatusBar(self))
 
     def open_clicked(self, s):
+        fileName = QFileDialog.getOpenFileName(self,
+            caption="Open Kayakulator Document",
+            filter="Kayakulator Documents (*.kayakulator.json)"
+        )
+        if len(fileName) == 0 or len(fileName[0]) == 0:
+            return
+        print(f"Open file {fileName[0]}")
+        self.display.EraseAll()
+
+    def save_clicked(self, s):
+        print("Save not implemented yet")
+
+    def save_as_clicked(self, s):
+        print("Save as not implemented yet")
+
+    def import_offsets_clicked(self, s):
         fileName = QFileDialog.getOpenFileName(self,
             caption="Open Offset File",
             filter="JSON Offset Files (*.offsets.json)"
@@ -446,23 +506,3 @@ class OptionsPanel(QWidget):
     def connect_mapper_to_tree_view(self, document):
         """For backwards compatibility - this now delegates to set_document."""
         self.set_document(document)
-
-
-class MainToolbar(QToolBar):
-    def __init__(self, parent):
-        super().__init__(parent)
-
-        pixmapopen = getattr(QStyle, "SP_DialogOpenButton")
-        iconopen = self.style().standardIcon(pixmapopen)
-
-        open_action = QAction("Open...", self, icon=iconopen, shortcut=QKeySequence.Open)
-        open_action.setStatusTip("Open an offsets file")
-        open_action.triggered.connect(self.parent().open_clicked)
-        self.addAction(open_action)
-
-        pixmapsave = getattr(QStyle, "SP_DialogSaveButton")
-        iconsave = self.style().standardIcon(pixmapsave)
-        export_action = QAction("Export STEP...", self, icon=iconsave)
-        export_action.setStatusTip("Export solid geometry to STEP file")
-        export_action.triggered.connect(self.parent().export_to_step)
-        self.addAction(export_action)

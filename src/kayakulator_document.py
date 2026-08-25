@@ -103,7 +103,6 @@ class KayakulatorDocument:
             },
             'offsets': self.offsets.to_json_struct(),
             'frame_locations': list(self.frame_locations),
-            'default_profile_shape': profile_shape_to_dict(self.default_profile_shape) if self.default_profile_shape else None,
             'member_properties': {
                 member_to_id(member): member_properties_to_dict(props)
                 for member, props in self.member_properties.items()
@@ -131,11 +130,6 @@ class KayakulatorDocument:
 
         # Frame locations
         inst.frame_locations = data.get('frame_locations', [])
-
-        # Default profile
-        dps = data.get('default_profile_shape')
-        if dps is not None:
-            inst.default_profile_shape = profile_shape_from_dict(dps)
 
         # Initialize defaults for member_properties and then override
         if inst.offsets is not None:
