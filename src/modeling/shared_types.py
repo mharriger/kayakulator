@@ -1,15 +1,14 @@
-from enum import Enum
-from typing import Protocol, Literal
-from dataclasses import dataclass
+from enum import IntEnum
+from typing import Protocol
 
 
-class y_position(Enum):
+class y_position(IntEnum):
     TOP = 1
     CENTER = 2
     BOTTOM = 3
 
 
-class x_position(Enum):
+class x_position(IntEnum):
     LEFT = 1
     CENTER = 2
     RIGHT = 3

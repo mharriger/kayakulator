@@ -76,7 +76,9 @@ def profile_shape_from_dict(d: dict) -> ProfileShapeProperties:
         return None
     t = d.get('shape_type')
     if t == 'rectangle':
-        return ProfilePropertiesRectangle(width=d['width'], height=d['height'])
+        return ProfilePropertiesRectangle(width=d['width'], height=d['height'],
+                                          origin_pos_x=d['origin_pos_x'],
+                                          origin_pos_y=d['origin_pos_y'])
     if t == 'circle':
         return ProfilePropertiesCircle(radius=d['radius'])
     raise ValueError(f"Unknown profile shape type: {t}")

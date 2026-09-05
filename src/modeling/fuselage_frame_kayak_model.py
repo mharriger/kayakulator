@@ -1,7 +1,5 @@
-from abc import ABC, abstractmethod
-from typing import Self, List
+from typing import Self, List, Iterable
 from collections import defaultdict
-from itertools import chain
 
 from modeling.kayak_model_builder import KayakModelBuilder
 from modeling.stringer_model import StringerModel
@@ -16,14 +14,14 @@ from offsets.offset_table import OffsetTable
 from .geom_functions import intersect_shape_with_plane, mirror_2d_points, trim_shape_with_plane, YZ_PLANE, make_wire_from_points
 from OCC.Core.TopoDS import TopoDS_Shape, TopoDS_Compound
 from OCC.Core.gp import gp_Pln, gp_Pnt, gp_Dir, gp_Pnt2d, gp_Vec, gp_Lin
-from OCC.Core.TopExp import TopExp_Explorer
-from OCC.Core.TopAbs import TopAbs_EDGE
-from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
 from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeFace
 from OCC.Core.TopExp import topexp
 from OCC.Core.BRep import BRep_Tool
 from OCC.Core.GeomAbs import GeomAbs_Intersection
+from OCC.Core.Geom import Geom_Plane
+from OCC.Core.BRepGProp import brepgprop
+from OCC.Core.GProp import GProp_GProps
 
 from occ_helpers import get_shapes_from_compound
 
@@ -36,10 +34,10 @@ NO_SOLIDS = getattr(builtins, 'NO_SOLIDS', False)
 
 class FuselageFrameKayakModel:
     def __init__(self):
-        self._chines = []
-        self._gunwale = None
-        self._keel = None
-        self._deckridge = None
+        self._chines = Iterable[ChineModel]
+        self._gunwale: ChineModel = None
+        self._keel: KeelModel = None
+        self._deckridge: DeckridgeModel = None
         self._frames: dict[Member: FrameModel] = {}
         
     @property
@@ -78,6 +76,47 @@ class FuselageFrameKayakModel:
             dict[chine(idx)] = c
         return dict | self._frames
 
+    @property
+    def deckridge_front_trim_plane(self) -> Geom_Plane:
+        frontmost_face = None
+        frontmost_com_y = None
+        super(type(self._deckridge), self._deckridge).solid # Ensure solid has been modeled
+        for face in self._deckridge._solid.semantic_topology.get_face(TopologyRole.TOP):
+            props = GProp_GProps()
+            brepgprop.SurfaceProperties(face, props)
+            center_of_mass = props.CentreOfMass()
+            if not frontmost_com_y or center_of_mass.Y() < frontmost_com_y:
+                frontmost_com_y = center_of_mass.Y()
+                frontmost_face = face
+        return Geom_Plane.DownCast(BRep_Tool.Surface(frontmost_face))
+
+    @property
+    def keel_front_trim_plane(self) -> Geom_Plane:
+        frontmost_face = None
+        frontmost_com_y = None
+        super(type(self._keel), self._keel).solid # Ensure solid has been modeled
+        for face in self._keel._solid.semantic_topology.get_face(TopologyRole.TOP):
+            props = GProp_GProps()
+            brepgprop.SurfaceProperties(face, props)
+            center_of_mass = props.CentreOfMass()
+            if not frontmost_com_y or center_of_mass.Y() < frontmost_com_y:
+                frontmost_com_y = center_of_mass.Y()
+                frontmost_face = face
+        return Geom_Plane.DownCast(BRep_Tool.Surface(frontmost_face))
+
+    @property
+    def keel_rear_trim_plane(self) -> Geom_Plane:
+        rearmost_face = None
+        rearmost_com_y = None
+        super(type(self._keel), self._keel).solid # Ensure solid has been modeled
+        for face in self._keel._solid.semantic_topology.get_face(TopologyRole.TOP):
+            props = GProp_GProps()
+            brepgprop.SurfaceProperties(face, props)
+            center_of_mass = props.CentreOfMass()
+            if not rearmost_com_y or center_of_mass.Y() > rearmost_com_y:
+                rearmost_com_y = center_of_mass.Y()
+                rearmost_face = face
+        return Geom_Plane.DownCast(BRep_Tool.Surface(rearmost_face))
     
 class FuselageFrameKayakModelBuilder(KayakModelBuilder):
     def __init__(self, model: FuselageFrameKayakModel | None = None):
@@ -85,7 +124,9 @@ class FuselageFrameKayakModelBuilder(KayakModelBuilder):
         self._offset_table = None
         self._default_profile_shape: StringerProfile = None
         self._stringer_profiles = defaultdict(self._get_default_profile_shape)
+        self._stringer_endpoints = defaultdict(lambda: None)
         self._frame_positions: list[float] = []
+        self._hb_is_real_frames = []
         self.progress_callback = None
         self._build_frames = True
 
@@ -108,6 +149,10 @@ class FuselageFrameKayakModelBuilder(KayakModelBuilder):
         self._stringer_profiles[stringer] = profile_shape
         return self
     
+    def set_stringer_endpoints(self, stringer: str, endpoints: Iterable[float|None]) -> Self:
+        self._stringer_endpoints[stringer] = [gp_Pnt2d(0, e) if e else None for e in endpoints]
+        return self
+
     def set_frame_positions(self, posList: list[float]) -> Self:
         self._frame_positions = posList
         return self
@@ -115,6 +160,14 @@ class FuselageFrameKayakModelBuilder(KayakModelBuilder):
     def add_frame_position(self, pos: float) -> Self:
         self._frame_positions.append(pos)
         return self
+
+    def set_frame_hb_real(self, frame_idx: int, value: bool):
+        if value:
+            if frame_idx not in self._hb_is_real_frames:
+                self._hb_is_real_frames.append(frame_idx)
+        else:
+            if frame_idx in self._hb_is_real_frames:
+                self._hb_is_real_frames.remove(frame_idx)
     
     def set_build_frames(self, build_frames: bool) -> Self:
         self._build_frames = build_frames
@@ -127,25 +180,27 @@ class FuselageFrameKayakModelBuilder(KayakModelBuilder):
     def build_stringers(self) -> FuselageFrameKayakModel:
         if self.progress_callback:
             self.progress_callback("Modeling gunwale")
-        self._model._gunwale = ChineModel(self._offset_table.get_member_coordinates(GUNWALE, ['x', 'y', 'z']))
+        self._model._gunwale = ChineModel(self._model, self._offset_table.get_member_coordinates(GUNWALE, ['x', 'y', 'z']),
+                                          endpoints=self._stringer_endpoints[GUNWALE])
         self._model._gunwale.profile = self._stringer_profiles[GUNWALE]
         self._model._chines = []
         for chine_idx in range(self._offset_table.chine_count):
             if self.progress_callback:
                 self.progress_callback(f"Modeling chine {chine_idx}")
-            c = ChineModel(self._offset_table.get_member_coordinates(chine(chine_idx), ['x', 'y', 'z']))
+            c = ChineModel(self._model, self._offset_table.get_member_coordinates(chine(chine_idx), ['x', 'y', 'z']),
+                           endpoints=self._stringer_endpoints[chine(chine_idx)])
             c.profile = self._stringer_profiles[chine(chine_idx)]
             self._model._chines.append(c)
         if self.progress_callback:
             self.progress_callback("Modeling keel")
-        self._model._keel = KeelModel(self._offset_table.get_member_coordinates(KEEL, ['x', 'y', 'z']),
+        self._model._keel = KeelModel(self._model, self._offset_table.get_member_coordinates(KEEL, ['x', 'y', 'z']),
                                      *[e.Coord() for e in self._model._chines[0].endpoints_3d],
                                      *[e.Coord() for e in self._model._gunwale.endpoints_3d])
         self._model._keel.profile = self._stringer_profiles[KEEL]
         if self.progress_callback:
             self.progress_callback("Modeling deckridge")
-        self._model._deckridge = DeckridgeModel(self._offset_table.get_member_coordinates(DECKRIDGE, ['x', 'y', 'z']),
-                                               *[e.Coord() for e in self._model._gunwale.endpoints_3d])
+        self._model._deckridge = DeckridgeModel(self._model, self._offset_table.get_member_coordinates(DECKRIDGE, ['x', 'y', 'z']),
+                                               *[e.Coord() for e in self._model._gunwale.endpoints_3d], hb_is_real_frames=self._hb_is_real_frames)
         self._model._deckridge.profile = self._stringer_profiles[DECKRIDGE]
         return self._model
 

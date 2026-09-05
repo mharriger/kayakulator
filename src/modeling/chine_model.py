@@ -24,15 +24,19 @@ class ChineModel(StringerModel):
     to endpoints require the geometric modeling to be recalculated. If endpoints are not provided at
     initialization, this class automatically approximates them.
     """
-    def __init__(self, offsets: list[(float, float, float)], endpoints: list[gp_Pnt] = None):
-        super().__init__()
+    def __init__(self, parent, offsets: list[(float, float, float)], endpoints: list[gp_Pnt2d] = None):
+        super().__init__(parent)
         self.modeling_complete = False
         self._endpoints = endpoints
         self._offsets = offsets
         self._surface = self._fit_plane()
         self._curve = None
-        if endpoints is None:
-            self._endpoints = approximate_endpoints(self.offsets2d)
+        self._endpoints = [None, None] if endpoints is None else endpoints
+        approx_endpoints = approximate_endpoints(self.offsets2d)
+        if self._endpoints[0] is None:
+            self._endpoints[0] = approx_endpoints[0]
+        if self._endpoints[1] is None:
+            self._endpoints[1] = approx_endpoints[1]
         if self._offsets is not None and len(self._offsets) > 1 and self.endpoints is not None and len(self.endpoints) == 2:
             #Do the geometric modeling now if we have all the required data
             self._fit_bspline()

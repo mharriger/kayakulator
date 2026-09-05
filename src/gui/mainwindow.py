@@ -151,12 +151,28 @@ class MainWindow(QMainWindow):
             return
         print(f"Open file {fileName[0]}")
         self.display.EraseAll()
+        self._current_document = KayakulatorDocument()
+        self._current_document = KayakulatorDocument.load_from_file(fileName[0])
+        self.optionsPanel.treeWidget.set_document(self._current_document)
+        # Initialize the properties controller
+        self.optionsPanel.set_document(self._current_document)
+        worker = ModelingWorker(self._current_document, build_frames=False)
+        worker.signals.finished.connect(self.display_model)
+        worker.signals.error.connect(self.notify_error)
+        worker.signals.status.connect(self.update_status)
+        self._threadpool.start(worker)
 
     def save_clicked(self, s):
         print("Save not implemented yet")
 
     def save_as_clicked(self, s):
-        print("Save as not implemented yet")
+        fileName = QFileDialog.getSaveFileName(self,
+            caption="Save Kayakulator Document",
+            filter="Kayakulator Documents (*.kayakulator.json)"
+        )
+        if len(fileName) == 0 or len(fileName[0]) == 0:
+            return
+        self._current_document.save_to_file(fileName[0])
 
     def import_offsets_clicked(self, s):
         fileName = QFileDialog.getOpenFileName(self,

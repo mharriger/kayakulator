@@ -24,8 +24,6 @@ def test_save_and_load_roundtrip(tmp_path):
     # find a chine member instance from offsets
     ch = list(doc.member_properties.keys())[0]
     doc.member_properties[ch].color = (10, 20, 30)
-    # set default profile
-    doc.default_profile_shape = doc.member_properties[ch].profile_shape
 
     p = tmp_path / 'doc.json'
     doc.save_to_file(str(p))
@@ -47,6 +45,4 @@ def test_save_and_load_roundtrip(tmp_path):
                 break
         assert match is not None
         assert loaded.member_properties[match].color == props.color
-    # default profile shape exists
-    assert loaded.default_profile_shape is not None
-*** End Patch
+

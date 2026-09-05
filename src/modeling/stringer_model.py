@@ -4,22 +4,17 @@ from typing import Iterable
 
 from OCC.Core.gp import gp_Dir, gp_Pnt, gp_Ax2, gp_Ax3, gp_Lin, gp_Pln, gp_Pnt2d, gp_Trsf
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
-from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Shape, topods, TopoDS_Iterator, TopoDS_Edge
-from OCC.Core.Geom import Geom_Curve, Geom_Plane
+from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Shape, TopoDS_Edge
+from OCC.Core.Geom import Geom_Plane
 from OCC.Core.Geom2d import Geom2d_Curve
 from OCC.Core.GeomAPI import geomapi, GeomAPI_ExtremaCurveSurface
 from OCC.Core.IntAna import IntAna_QuadQuadGeo, IntAna_Line
 from OCC.Extend.TopologyUtils import TopologyExplorer
 from OCC.Core.GeomLProp import GeomLProp_CLProps
-from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakePipeShell
-from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse
-from OCC.Core.BRep import BRep_Tool
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
-from OCC.Core.TopAbs import TopAbs_VERTEX
-from OCC.Core.TopTools import TopTools_ListOfShape
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
 
-from .geom_functions import place_shape_by_ax2, trim_shape_with_plane, construct_perpendicular_in_plane, YZ_PLANE, intersect_curve_with_plane
+from .geom_functions import trim_shape_with_plane, YZ_PLANE, intersect_curve_with_plane
 from modeling.stringer_profile import StringerProfile
 from modeling.stringer_solid import StringerSolid
 
@@ -29,11 +24,12 @@ class StringerModel(ABC):
 
     A stringer model's ultimate purpose is to provide topological objects (TopoDS_*) to the kayak model.
     """
-    def __init__(self):
+    def __init__(self, parent):
         self.modeling_complete: bool = False
         self._surface = None
         self._profile: StringerProfile = None
         self._solid: StringerSolid
+        self.parent= parent
 
     @property
     @abstractmethod

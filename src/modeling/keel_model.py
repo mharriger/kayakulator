@@ -1,4 +1,5 @@
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Dir, gp_Pln, gp_Ax3, gp_Ax2, gp_Trsf
+from OCC.Core.TopoDS import TopoDS_Shape
 from OCC.Core.TColgp import TColgp_Array1OfPnt
 from OCC.Core.GCE2d import GCE2d_MakeSegment
 from OCC.Extend.TopologyUtils import TopologyExplorer
@@ -8,7 +9,7 @@ from OCC.Core.GeomLProp import GeomLProp_CLProps
 
 from minimum_energy_bspline import minimum_energy_bspline
 from occ_helpers import bspline_to_occ_bspline
-from .geom_functions import get_plane_from_face
+from .geom_functions import get_plane_from_face, trim_shape_with_plane
 
 from modeling.stringer_model import StringerModel
 from .stringer_profile import StringerProfile
@@ -20,11 +21,11 @@ class KeelModel(StringerModel):
     Similar to chine/gunwale but it also has the bow/stern line segments
     """
 
-    def __init__(self, offsets,
+    def __init__(self, parent, offsets,
                  chine0_bow_endpoint,  chine0_stern_endpoint,
                  gunwale_bow_endpoint, gunwale_stern_endpoint):
         
-        super().__init__()
+        super().__init__(parent)
         plane_axis = gp_Ax3(gp_Pnt(0,0,0), gp_Dir(1,0,0), gp_Dir(0,1,0))
         self._surface = gp_Pln(plane_axis)
         self._offsets = offsets
@@ -88,13 +89,20 @@ class KeelModel(StringerModel):
         return trsf
 
     @property
+    def solid(self) -> TopoDS_Shape:
+        base_solid = super().solid
+        # Trim keel with front deckridge
+        return trim_shape_with_plane(base_solid, self.parent.deckridge_front_trim_plane.Pln(), gp_Pnt(0,0,100000))
+
+    @property
     def base_geometry(self):
     
         return self._geometry_list
 
     def _get_trim_plane(self):
         """
-        TODO: Trim the keel with the plane parallel to the top of the deckridge
+        The keel should not be trimmed because there is only one
+        and it lies on both sides of the centerline
         """
         return None
 

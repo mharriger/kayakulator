@@ -3,13 +3,14 @@
 A kayak being processed by the kayakulator.
 
 """
-from offsets.offset_table import OffsetTable
+from offsets.offset_table import OffsetTable, MemberType
 from modeling.fuselage_frame_kayak_model import FuselageFrameKayakModelBuilder, FuselageFrameKayakModel
 from modeling.geom_functions import make_profile_shape, x_position, y_position
 from member_properties import ProfileShapeProperties, ProfilePropertiesRectangle, member_properties_factory, MemberProperties, profile_shape_to_dict, profile_shape_from_dict, member_properties_to_dict, member_properties_from_dict
 from offsets.member import Member, GUNWALE, DECKRIDGE, KEEL, frame, MemberType, chine
 from offsets.member import member_to_id, member_from_id
 from OCC.Core.AIS import AIS_Shape
+from OCC.Core.gp import gp_Pnt2d
 from settings_manager import SettingsManager
 import json
 
@@ -51,9 +52,6 @@ class KayakulatorDocument:
                 raise RuntimeError('No offset data')
             if not self.member_properties:
                 self.initialize_member_properties()
-            sm = SettingsManager()
-            #TODO: The profile shape is set by default in StringerProperties but it doesn't have the origin_position set
-            # Need to figure out how to get the correct origin position on those then use that profile shape rather than creating a new one
             builder = FuselageFrameKayakModelBuilder() \
                 .set_offsets(self.offsets) \
                 .set_default_profile_shape(make_profile_shape(self.member_properties[chine(0)].profile_shape)) \
@@ -61,16 +59,28 @@ class KayakulatorDocument:
                 .set_stringer_profile(DECKRIDGE, make_profile_shape(self.member_properties[DECKRIDGE].profile_shape)) \
                 .set_stringer_profile(KEEL, make_profile_shape(self.member_properties[KEEL].profile_shape)) \
                 .setProgressCallback(status_callback)
+            builder.set_stringer_endpoints(GUNWALE, [self.member_properties[GUNWALE].bow_endpoint_y,
+                                                     self.member_properties[GUNWALE].stern_endpoint_y])
+            for chine_idx in range(self.offsets.chine_count):
+                if self.member_properties[chine(chine_idx)].bow_endpoint_y is not None:
+                    builder.set_stringer_endpoints(chine(chine_idx),
+                                                        [self.member_properties[chine(chine_idx)].bow_endpoint_y,
+                                                         self.member_properties[chine(chine_idx)].stern_endpoint_y])
             for fpos in self.offsets.station_locations.values():
                 builder.add_frame_position(fpos)
+            for member, memberProps in self.member_properties.items():
+                if member.type == MemberType.FRAME:
+                    builder.set_frame_hb_real(member.index, not memberProps.deckridge_hb_is_actually_frame)
             #TODO: Should a reference to the model builder be kept? Is this best practice?
             self._model_builder = builder
             self.model = builder.build_stringers()
             # Set the bow and stern Y values in the member properties based on the modeled stringers
             for memberType, memberObject in self.model.stringers.items():
                 if memberType.type in (MemberType.GUNWALE, MemberType.CHINE):
-                    self.member_properties[memberType].bow_endpoint_y = memberObject.endpoints[0].Y()
-                    self.member_properties[memberType].stern_endpoint_y = memberObject.endpoints[1].Y()
+                    if not self.member_properties[memberType].bow_endpoint_y:
+                        self.member_properties[memberType].bow_endpoint_y = memberObject.endpoints[0].Y()
+                    if not self.member_properties[memberType].stern_endpoint_y:
+                        self.member_properties[memberType].stern_endpoint_y = memberObject.endpoints[1].Y()
         if build_frames:
             builder.build_frames()
 

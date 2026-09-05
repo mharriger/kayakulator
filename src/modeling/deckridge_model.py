@@ -1,10 +1,10 @@
 from OCC.Core.gp import gp_Pln, gp_Pnt, gp_Dir, gp_Ax3, gp_Ax2, gp_Trsf
 from OCC.Core.Geom2d import Geom2d_TrimmedCurve, Geom2d_Line
-from OCC.Core.TopoDS import TopoDS_Wire
+from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Shape
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
 from OCC.Core.GeomLProp import GeomLProp_CLProps
 
-from .geom_functions import segment_polyline_near_straight, LineSegment, mirror_shape_across_yz_plane
+from .geom_functions import segment_polyline_near_straight, LineSegment, mirror_shape_across_yz_plane, trim_shape_with_plane
 
 from modeling.stringer_model import StringerModel
 from .stringer_profile import StringerProfile
@@ -18,10 +18,10 @@ class DeckridgeModel(StringerModel):
     One segment from the bow to the cockpit, another segment from the cockpit to and endpoint that could be the stern or a transverse frame
     The rear segment may actually be two parallel segments symmetrical about the centerline
     """
-    def __init__(self, offsets,
+    def __init__(self, parent, offsets,
                  gunwale_bow_endpoint, gunwale_stern_endpoint,
                  hb_is_real_frames = []):
-        super().__init__()
+        super().__init__(parent)
         self._gunwale_bow_endpoint = gunwale_bow_endpoint
         self._gunwale_stern_endpoint = gunwale_stern_endpoint
         self._offsets = offsets
@@ -93,6 +93,17 @@ class DeckridgeModel(StringerModel):
             if frame_idx in self._hb_is_real_frames:
                 self._hb_is_real_frames.remove(frame_idx)
         self.remodel()
+
+    @property
+    def solid(self) -> TopoDS_Shape:
+        base_solid = super().solid
+        # Trim keel with front deckridge
+        return trim_shape_with_plane(
+            trim_shape_with_plane(
+                base_solid, self.parent.keel_front_trim_plane.Pln(), gp_Pnt(0, -100000, -100000)
+            ),
+            self.parent.keel_rear_trim_plane.Pln(), gp_Pnt(0,100000,-100000)
+        )
 
     @property
     def base_geometry(self):
