@@ -11,7 +11,11 @@ from offsets.member import Member, GUNWALE, DECKRIDGE, KEEL, frame, MemberType, 
 from offsets.member import member_to_id, member_from_id
 from OCC.Core.AIS import AIS_Shape
 from OCC.Core.gp import gp_Pnt2d
+from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Common
 from settings_manager import SettingsManager
+from modeling.geom_functions import make_stringer_cutter, place_shape_by_ax2
+from OCC.Core.GProp import GProp_GProps
+from OCC.Core.BRepGProp import brepgprop
 import json
 
 class KayakulatorDocument:
@@ -41,10 +45,12 @@ class KayakulatorDocument:
             if self.model.modelingComplete:
                 if build_frames and self._model_builder is not None:
                     self._model_builder.build_frames()
+                    self._apply_frame_cutters_to_frames()
                 return
             else:
                 if build_frames and self._model_builder is not None:
                     self._model_builder.build_frames()
+                    self._apply_frame_cutters_to_frames()
                     return
                 return
         else:
@@ -81,8 +87,112 @@ class KayakulatorDocument:
                         self.member_properties[memberType].bow_endpoint_y = memberObject.endpoints[0].Y()
                     if not self.member_properties[memberType].stern_endpoint_y:
                         self.member_properties[memberType].stern_endpoint_y = memberObject.endpoints[1].Y()
+
+                self._apply_stringer_cutters_for_member(memberType, memberObject)
+
         if build_frames:
-            builder.build_frames()
+            self.model = self._model_builder.build_frames()
+            self._apply_frame_cutters_to_frames()
+
+    def _apply_stringer_cutters_for_member(self, member, stringer):
+        """Cut each frame slot from the modeled stringer solid."""
+        if self.offsets is None or stringer is None:
+            return None
+
+        solid = getattr(stringer, "_solid", None)
+        if solid is None:
+            solid = stringer.solid
+        else:
+            solid = solid.shape
+
+        if solid is None:
+            return None
+
+        profile_shape = getattr(self.member_properties.get(member), 'profile_shape', None)
+        if profile_shape is None:
+            return solid
+
+        width = getattr(profile_shape, 'width', 25.4)
+        height = getattr(profile_shape, 'height', 12.7) * 2.0
+        settings = SettingsManager()
+        frame_thickness = next(
+            (props.thickness for props in self.member_properties.values()
+             if hasattr(props, 'thickness')),
+            settings.DEFAULTS.get((MemberType.FRAME, 'frame_thickness'), 12.7)
+        )
+        cutter_y_width = frame_thickness + settings.DEFAULTS.get((None, 'slot_clearance'), 0.5)
+
+        for fpos in self.offsets.station_locations.values():
+            origin = stringer.get_frame_cutter_origin(fpos, 10.0)
+            if origin is None:
+                continue
+
+            cutter = place_shape_by_ax2(make_stringer_cutter(width, height, cutter_y_width), origin)
+            cut = BRepAlgoAPI_Cut(solid, cutter)
+            cut.Build()
+            if not cut.IsDone():
+                raise RuntimeError(f"Frame cutter failed for {member} at station {fpos}")
+            solid = cut.Shape()
+
+        if hasattr(stringer, '_solid') and stringer._solid is not None:
+            stringer._solid.shape = solid
+        return solid
+
+    def _apply_frame_cutters_for_frame(self, frame_model):
+        """Subtract the overlap between a frame and each stringer from the frame solid."""
+        if frame_model is None:
+            return None
+
+        frame_solid = getattr(frame_model, '_extrusion', None)
+        if frame_solid is None:
+            frame_solid = getattr(frame_model, 'solid', None)
+        if frame_solid is None:
+            return None
+
+        for stringer in getattr(self.model, 'stringers', {}).values():
+            if stringer is None:
+                continue
+
+            stringer_solid = getattr(stringer, '_solid', None)
+            if stringer_solid is None:
+                stringer_solid = getattr(stringer, 'solid', None)
+            else:
+                stringer_solid = stringer_solid.shape
+
+            if stringer_solid is None:
+                continue
+
+            common = BRepAlgoAPI_Common(frame_solid, stringer_solid)
+            common.Build()
+            if not common.IsDone():
+                raise RuntimeError("Frame-stringer intersection failed")
+
+            #Check that common has a positive volume
+            props = GProp_GProps()
+            brepgprop.VolumeProperties(common.Shape(), props)
+            if props.Mass() <= 0:
+                raise ValueError("Frame-stringer intersection has non-positive volume")
+
+
+            cut = BRepAlgoAPI_Cut(frame_solid, common.Shape())
+            cut.Build()
+            if not cut.IsDone():
+                raise RuntimeError("Frame-stringer subtraction failed")
+            frame_solid = cut.Shape()
+
+        frame_model._extrusion = frame_solid
+        return frame_solid
+
+    def _apply_frame_cutters_to_frames(self):
+        """Subtract each stringer/frame overlap from each frame solid."""
+        if self.model is None:
+            return
+
+        frames = getattr(self.model, '_frames', {})
+        for frame_model in frames.values():
+            self._apply_frame_cutters_for_frame(frame_model)
+
+        return self.model
 
     def build_frame(self, frame_idx: int):
         """Build the requested frame geometry on demand."""

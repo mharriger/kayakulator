@@ -1,0 +1,312 @@
+{
+  "metadata": {
+    "name": "Sea Tour 15 EXP",
+    "schema_version": 1
+  },
+  "offsets": {
+    "name": null,
+    "units": "mm",
+    "stations": [
+      {
+        "location": 853.4399999999999,
+        "keel": 50.9016,
+        "deckridge": {
+          "hb": 0.0,
+          "hab": 295.656
+        },
+        "gunwale": {
+          "hb": 167.33520000000001,
+          "hab": 252.0696
+        },
+        "chines": [
+          {
+            "hb": 63.7032,
+            "hab": 75.5904
+          },
+          {
+            "hb": 110.0328,
+            "hab": 106.67999999999999
+          },
+          {
+            "hb": 133.1976,
+            "hab": 152.0952
+          }
+        ]
+      },
+      {
+        "location": 1463.04,
+        "keel": 17.0688,
+        "deckridge": {
+          "hb": 0.0,
+          "hab": 286.512
+        },
+        "gunwale": {
+          "hb": 259.3848,
+          "hab": 220.0656
+        },
+        "chines": [
+          {
+            "hb": 128.016,
+            "hab": 35.052
+          },
+          {
+            "hb": 199.3392,
+            "hab": 65.532
+          },
+          {
+            "hb": 227.076,
+            "hab": 116.43360000000001
+          }
+        ]
+      },
+      {
+        "location": 2072.64,
+        "keel": 1.524,
+        "deckridge": {
+          "hb": 60.96000000000001,
+          "hab": 280.416
+        },
+        "gunwale": {
+          "hb": 301.752,
+          "hab": 201.168
+        },
+        "chines": [
+          {
+            "hb": 156.972,
+            "hab": 14.935200000000002
+          },
+          {
+            "hb": 239.57280000000003,
+            "hab": 44.8056
+          },
+          {
+            "hb": 269.748,
+            "hab": 97.2312
+          }
+        ]
+      },
+      {
+        "location": 2834.6400000000003,
+        "keel": 5.4864,
+        "deckridge": {
+          "hb": 152.4,
+          "hab": 198.12
+        },
+        "gunwale": {
+          "hb": 284.6832,
+          "hab": 197.2056
+        },
+        "chines": [
+          {
+            "hb": 145.6944,
+            "hab": 16.764
+          },
+          {
+            "hb": 224.028,
+            "hab": 47.244
+          },
+          {
+            "hb": 252.6792,
+            "hab": 97.2312
+          }
+        ]
+      },
+      {
+        "location": 3596.6400000000003,
+        "keel": 33.528,
+        "deckridge": {
+          "hb": 152.4,
+          "hab": 213.35999999999999
+        },
+        "gunwale": {
+          "hb": 189.8904,
+          "hab": 213.35999999999999
+        },
+        "chines": [
+          {
+            "hb": 83.82000000000001,
+            "hab": 47.5488
+          },
+          {
+            "hb": 136.8552,
+            "hab": 79.248
+          },
+          {
+            "hb": 159.4104,
+            "hab": 121.92000000000002
+          }
+        ]
+      }
+    ]
+  },
+  "frame_locations": [],
+  "member_properties": {
+    "chine:0": {
+      "type": "stringer",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "profile_shape": {
+        "width": 19.1,
+        "height": 19.1,
+        "shape_type": "rectangle",
+        "origin_pos_x": 3,
+        "origin_pos_y": 3
+      },
+      "bow_endpoint_y": 431.6622394414437,
+      "stern_endpoint_y": 4174.6211788883575
+    },
+    "chine:1": {
+      "type": "stringer",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "profile_shape": {
+        "width": 19.1,
+        "height": 19.1,
+        "shape_type": "rectangle",
+        "origin_pos_x": 3,
+        "origin_pos_y": 3
+      },
+      "bow_endpoint_y": 378.0,
+      "stern_endpoint_y": 4230.0
+    },
+    "chine:2": {
+      "type": "stringer",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "profile_shape": {
+        "width": 19.1,
+        "height": 19.1,
+        "shape_type": "rectangle",
+        "origin_pos_x": 3,
+        "origin_pos_y": 3
+      },
+      "bow_endpoint_y": 315.0,
+      "stern_endpoint_y": 4283.0
+    },
+    "deckridge": {
+      "type": "stringer",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "profile_shape": {
+        "width": 19.1,
+        "height": 25.4,
+        "shape_type": "rectangle",
+        "origin_pos_x": 2,
+        "origin_pos_y": 1
+      },
+      "bow_endpoint_y": null,
+      "stern_endpoint_y": null
+    },
+    "gunwale": {
+      "type": "stringer",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "profile_shape": {
+        "width": 19.1,
+        "height": 38.2,
+        "shape_type": "rectangle",
+        "origin_pos_x": 3,
+        "origin_pos_y": 1
+      },
+      "bow_endpoint_y": 166.06289495690544,
+      "stern_endpoint_y": 4407.996670362993
+    },
+    "keel": {
+      "type": "stringer",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "profile_shape": {
+        "width": 19.1,
+        "height": 25.4,
+        "shape_type": "rectangle",
+        "origin_pos_x": 2,
+        "origin_pos_y": 3
+      },
+      "bow_endpoint_y": null,
+      "stern_endpoint_y": null
+    },
+    "frame:0": {
+      "type": "frame",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "thickness": 12.7,
+      "width": 38.099999999999994,
+      "skin_relief_depth": null,
+      "interior_fillet_radius": 12.7,
+      "deckridge_hb_is_actually_frame": true
+    },
+    "frame:1": {
+      "type": "frame",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "thickness": 12.7,
+      "width": 38.099999999999994,
+      "skin_relief_depth": null,
+      "interior_fillet_radius": 12.7,
+      "deckridge_hb_is_actually_frame": true
+    },
+    "frame:2": {
+      "type": "frame",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "thickness": 12.7,
+      "width": 38.099999999999994,
+      "skin_relief_depth": null,
+      "interior_fillet_radius": 12.7,
+      "deckridge_hb_is_actually_frame": true
+    },
+    "frame:3": {
+      "type": "frame",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "thickness": 12.7,
+      "width": 38.099999999999994,
+      "skin_relief_depth": null,
+      "interior_fillet_radius": 12.7,
+      "deckridge_hb_is_actually_frame": false
+    },
+    "frame:4": {
+      "type": "frame",
+      "color": [
+        150,
+        111,
+        51
+      ],
+      "thickness": 12.7,
+      "width": 38.099999999999994,
+      "skin_relief_depth": null,
+      "interior_fillet_radius": 12.7,
+      "deckridge_hb_is_actually_frame": false
+    }
+  }
+}

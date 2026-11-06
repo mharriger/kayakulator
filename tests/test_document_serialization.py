@@ -1,5 +1,7 @@
 import json
 import tempfile
+from types import SimpleNamespace
+
 from offsets.offset_table import OffsetTable
 from offsets.member import chine, GUNWALE, KEEL
 from kayakulator_document import KayakulatorDocument
@@ -45,4 +47,55 @@ def test_save_and_load_roundtrip(tmp_path):
                 break
         assert match is not None
         assert loaded.member_properties[match].color == props.color
+
+
+def test_apply_frame_cutters_subtracts_stringer_intersections(monkeypatch):
+    doc = KayakulatorDocument()
+    frame = SimpleNamespace(_extrusion='frame-solid')
+    stringer = SimpleNamespace(_solid=SimpleNamespace(shape='stringer-solid'))
+    doc.model = SimpleNamespace(_frames={0: frame}, stringers={GUNWALE: stringer})
+
+    cut_calls = []
+    common_calls = []
+
+    class FakeCommon:
+        def __init__(self, left, right):
+            self.left = left
+            self.right = right
+        def Build(self):
+            return None
+        def IsDone(self):
+            return True
+        def Shape(self):
+            return f"{self.left} ∩ {self.right}"
+
+    class FakeCut:
+        def __init__(self, left, right):
+            self.left = left
+            self.right = right
+        def Build(self):
+            return None
+        def IsDone(self):
+            return True
+        def Shape(self):
+            return f"{self.left} cut {self.right}"
+
+    def fake_common(left, right):
+        common_calls.append((left, right))
+        return FakeCommon(left, right)
+
+    def fake_cut(left, right):
+        cut_calls.append((left, right))
+        return FakeCut(left, right)
+
+    monkeypatch.setattr('kayakulator_document.BRepAlgoAPI_Common', fake_common)
+    monkeypatch.setattr('kayakulator_document.BRepAlgoAPI_Cut', fake_cut)
+
+    doc._apply_frame_cutters_for_frame(frame)
+
+    assert common_calls == [('frame-solid', 'stringer-solid')]
+    assert cut_calls == [('frame-solid', 'frame-solid ∩ stringer-solid')]
+    assert frame._extrusion == 'frame-solid cut frame-solid ∩ stringer-solid'
+
+
 

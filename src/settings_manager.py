@@ -22,6 +22,8 @@ class SettingsManager:
             (MemberType.DECKRIDGE, "stringer_y_pos"): y_position.TOP,
             (MemberType.KEEL, "stringer_x_pos"): x_position.CENTER,
             (MemberType.KEEL, "stringer_y_pos"): y_position.BOTTOM,
+            (None, "slot_clearance"): 0.5,
+            (None, "stringer_slot_depth"): 25.4,
         }
 
     def get(self, key: str) -> any:

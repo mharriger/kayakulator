@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Iterable
 
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Lin, gp_Dir, gp_Dir2d, gp_Pln, gp_Ax1, gp_Ax2, gp_Ax3, gp_Ax2d, gp_Circ, gp_Trsf, gp_Vec
 from OCC.Core.Geom import Geom_Plane, Geom_Line, Geom_Curve
@@ -6,7 +7,7 @@ from OCC.Core.GeomAPI import GeomAPI_ProjectPointOnSurf, GeomAPI_IntSS, GeomAPI_
 from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve, Geom2dAPI_ProjectPointOnCurve
 from OCC.Core.Geom2d import Geom2d_Circle, Geom2d_Line, Geom2d_TrimmedCurve
 from OCC.Core.GeomAbs import GeomAbs_Plane
-from OCC.Core.IntAna import IntAna_IntConicQuad
+from OCC.Core.IntAna import IntAna_IntConicQuad, IntAna_QuadQuadGeo, IntAna_Line
 from OCC.Core.GCE2d import GCE2d_MakeSegment
 from OCC.Core.BRepBuilderAPI import (
     BRepBuilderAPI_MakeFace,
@@ -15,14 +16,18 @@ from OCC.Core.BRepBuilderAPI import (
     BRepBuilderAPI_MakeEdge,
     BRepBuilderAPI_MakeVertex
 )
-from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace, BRepPrimAPI_MakePrism
-from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse, BRepAlgoAPI_Section
-from OCC.Core.BRepAdaptor import BRepAdaptor_Surface
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeHalfSpace, BRepPrimAPI_MakePrism, BRepPrimAPI_MakeBox
+from OCC.Core.BRep import BRep_Tool
+from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse, BRepAlgoAPI_Section, BRepAlgoAPI_Common, BRepAlgoAPI_Cut
+from OCC.Core.BRepAdaptor import BRepAdaptor_Surface, BRepAdaptor_Curve
+from OCC.Core.BRepGProp import brepgprop
+from OCC.Core.GProp import GProp_GProps
 from OCC.Core.GC import GC_MakeCircle
-from OCC.Core.TopoDS import TopoDS_Face, TopoDS_Shape
+from OCC.Core.TopoDS import TopoDS_Face, TopoDS_Shape, TopoDS_Edge, TopoDS_Vertex
 from OCC.Extend.TopologyUtils import TopologyExplorer
+from OCC.Core.BRepBndLib import brepbndlib_Add
+from OCC.Core.Bnd import Bnd_Box
 
-from attr import dataclass
 import skspatial.objects as skso
 
 from modeling.shared_types import ProfileShapeProperties, x_position, y_position
@@ -30,8 +35,8 @@ from modeling.stringer_profile import StringerProfile
 from modeling.semantic_topology import SemanticTopology, TopologyRole
 
 
-from OCC.Core.TopExp import TopExp_Explorer
-from OCC.Core.TopAbs import TopAbs_EDGE
+from OCC.Core.TopExp import TopExp_Explorer, topexp
+from OCC.Core.TopAbs import TopAbs_EDGE, TopAbs_SOLID
 
 YZ_PLANE = gp_Pln(gp_Pnt(0,0,0), gp_Dir())
 
@@ -54,6 +59,14 @@ def intersect_plane_z_axis(plane) -> gp_Ax1:
     pt = intersect.Point(1)
     pln_ax = gp_Ax1(pt, plane.Axis().Direction())
     return pln_ax    
+
+def intersect_plane_with_plane(plane1: gp_Pln, plane2: gp_Pln) -> gp_Lin:
+    """Intersect two planes and return the resulting line."""
+    intana = IntAna_QuadQuadGeo(plane1, plane2, 1e-6, 1e-6)
+    if intana.IsDone() and intana.NbSolutions() == 1 and intana.TypeInter() == IntAna_Line:
+        return intana.Line(1)
+    else:
+        raise RuntimeError("Intersection did not produce a single line")
 
 def align_plane_y_axis(plane) -> gp_Pln:
     intss = GeomAPI_IntSS(Geom_Plane(plane), Geom_Plane(YZ_PLANE), 1e-7)
@@ -403,6 +416,14 @@ def get_dir_point_to_point(p1: gp_Pnt, p2: gp_Pnt) -> gp_Dir:
 
     return gp_Dir(dx, dy, dz)
 
+def get_edge_midpoint(c: TopoDS_Edge) -> gp_Pnt:
+    adaptor = BRepAdaptor_Curve(c)
+    first_param = adaptor.FirstParameter()
+    last_param = adaptor.LastParameter()
+    mid_param = (first_param + last_param) / 2.0
+    
+    return adaptor.Value(mid_param)
+
 def intersect_shape_with_plane(shape: TopoDS_Shape, plane: gp_Pln) -> TopoDS_Shape:
     """
     Intersect a TopoDS_Shape with a plane
@@ -489,3 +510,68 @@ def make_wire_from_points(points):
         raise RuntimeError("Failed to create wire")
 
     return wire_builder.Wire()
+
+def make_stringer_cutout(width, height, depth) -> TopoDS_Shape:
+    """
+    Create a rectangular solid of given dimensions, with the origin
+    at the center of the XZ face, and the solid exending into -X
+
+    Args:
+        width (float): The width of the box.
+        height (float): The height of the box.
+        depth (float): The depth of the box.
+
+    Returns:
+        TopoDS_Shape: The resulting rectangular solid.
+    """
+
+    corner1_x = 0
+    corner1_y = depth / 2.0
+    corner1_z = height / 2.0
+    corner2_x = -width
+    corner2_y = -depth / 2.0
+    corner2_z = -height / 2.0
+    
+    return BRepPrimAPI_MakeBox(
+        gp_Pnt(corner1_x, corner1_y, corner1_z),
+        gp_Pnt(corner2_x, corner2_y, corner2_z)
+    ).Shape()
+
+def get_edge_endpoints(edge: TopoDS_Edge):
+    v1, v2 = TopoDS_Vertex(), TopoDS_Vertex()
+    topexp.Vertices(edge, v1, v2)
+
+    start_pnt = BRep_Tool.Pnt(v1)
+    end_pnt = BRep_Tool.Pnt(v2)
+    
+    # Access coordinates using .X(), .Y(), .Z()
+    print(f"Start: ({start_pnt.X()}, {start_pnt.Y()}, {start_pnt.Z()})")
+    print(f"End: ({end_pnt.X()}, {end_pnt.Y()}, {end_pnt.Z()})")
+    
+    return start_pnt, end_pnt
+
+def make_stringer_cutter(width, height, depth) -> TopoDS_Shape:
+    """
+    Create a rectangular solid of given dimensions, with the origin
+    at the center of the XZ face, and the solid exending into -X
+
+    Args:
+        width (float): The width of the box.
+        height (float): The height of the box.
+        depth (float): The depth of the box.
+
+    Returns:
+        TopoDS_Shape: The resulting rectangular solid.
+    """
+
+    corner1_x = 0
+    corner1_y = depth / 2.0
+    corner1_z = height / 2.0
+    corner2_x = -width
+    corner2_y = -depth / 2.0
+    corner2_z = -height / 2.0
+    
+    return BRepPrimAPI_MakeBox(
+        gp_Pnt(corner1_x, corner1_y, corner1_z),
+        gp_Pnt(corner2_x, corner2_y, corner2_z)
+    ).Shape()

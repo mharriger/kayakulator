@@ -1,5 +1,5 @@
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d, gp_Dir, gp_Pln, gp_Ax3, gp_Ax2, gp_Trsf
-from OCC.Core.TopoDS import TopoDS_Shape
+from OCC.Core.TopoDS import TopoDS_Shape, TopoDS_Iterator
 from OCC.Core.TColgp import TColgp_Array1OfPnt
 from OCC.Core.GCE2d import GCE2d_MakeSegment
 from OCC.Extend.TopologyUtils import TopologyExplorer
@@ -9,7 +9,7 @@ from OCC.Core.GeomLProp import GeomLProp_CLProps
 
 from minimum_energy_bspline import minimum_energy_bspline
 from occ_helpers import bspline_to_occ_bspline
-from .geom_functions import get_plane_from_face, trim_shape_with_plane
+from .geom_functions import get_plane_from_face, trim_shape_with_plane, get_edge_endpoints
 
 from modeling.stringer_model import StringerModel
 from .stringer_profile import StringerProfile
@@ -144,3 +144,21 @@ class KeelModel(StringerModel):
             return face_area_dict[max(face_area_dict.keys())]
         else:
             return face_area_dict[sorted(face_area_dict.keys())[-2]]
+
+    def get_frame_cutter_origin(self, plane_y: float, distance: float = 0.0) -> gp_Ax2:
+        """
+        Keel has a different implementation because it is much simpler than the general case
+        """
+        pt_x = 0
+        pt_y = plane_y
+        isect = self.intersect_plane_with_face_by_role(plane_y, TopologyRole.INNER)
+        if isect is not None:
+            it = TopoDS_Iterator(isect)
+            shape = it.Value()
+            ep1, ep2 = get_edge_endpoints(shape)
+            pt_z =(ep1.Z() if ep1.X() < ep2.X() else ep2.Z()) - distance
+            ax = gp_Ax2(gp_Pnt(pt_x, pt_y, pt_z), gp_Dir(1,0,0))
+            ax.SetXDirection(gp_Dir(0,0,1))
+            ax.SetYDirection(gp_Dir(0,1,0))
+            return ax
+        return None

@@ -4,7 +4,7 @@ from typing import Iterable
 
 from OCC.Core.gp import gp_Dir, gp_Pnt, gp_Ax2, gp_Ax3, gp_Lin, gp_Pln, gp_Pnt2d, gp_Trsf
 from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeEdge
-from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Shape, TopoDS_Edge
+from OCC.Core.TopoDS import TopoDS_Wire, TopoDS_Shape, TopoDS_Edge, TopoDS_Iterator
 from OCC.Core.Geom import Geom_Plane
 from OCC.Core.Geom2d import Geom2d_Curve
 from OCC.Core.GeomAPI import geomapi, GeomAPI_ExtremaCurveSurface
@@ -14,7 +14,16 @@ from OCC.Core.GeomLProp import GeomLProp_CLProps
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
 
-from .geom_functions import trim_shape_with_plane, YZ_PLANE, intersect_curve_with_plane
+from modeling.semantic_topology import TopologyRole
+
+from .geom_functions import (
+    trim_shape_with_plane,
+    YZ_PLANE,
+    intersect_curve_with_plane,
+    intersect_shape_with_plane,
+    get_edge_midpoint,
+    intersect_plane_with_plane
+)  
 from modeling.stringer_profile import StringerProfile
 from modeling.stringer_solid import StringerSolid
 
@@ -58,6 +67,14 @@ class StringerModel(ABC):
         Return the plane this stringer should be trimmed with. By default it is the YZ plane
         """
         return YZ_PLANE
+
+    def notch_for_frames(self):
+        """
+        Create a notch at the location each frame intersects the stringer
+        """
+        #TODO: Move notch logic from KayakulatorDocument to here
+        pass
+        
 
     @property
     def solid(self) -> TopoDS_Shape:
@@ -207,4 +224,51 @@ class StringerModel(ABC):
                     extDict[dist].append(ptCurve)
         if len(extDict) > 0:
             return extDict[max(extDict.keys())][0]
+        return None
+
+    def intersect_plane_with_face_by_role(self, plane_y: float, face_role: TopologyRole):
+        """
+        Get the intersection of one of the stringer's faces with a transverse plane at a specific y coordinate.
+        Return None if the stringer does not intersect the frame.
+        """
+        plane = gp_Pln(gp_Pnt(0, plane_y, 0), gp_Dir(0,1,0))
+        inner_surfaces = self.get_faces_by_role(face_role)
+        for surface in inner_surfaces:
+            isect = intersect_shape_with_plane(surface, plane)
+            if isect is not None:
+                return isect
+        return None
+
+    def get_frame_cutter_origin(self, plane_y: float, distance: float = 0.0) -> gp_Ax2:
+        """
+        Get the origin point of the intersection of one of the stringer's faces with
+        a transverse plane at a specific y coordinate.
+
+        Return None if the stringer does not intersect the plane.
+        """
+        isect = self.intersect_plane_with_face_by_role(plane_y, TopologyRole.INNER)
+        if isect is not None:
+            it = TopoDS_Iterator(isect)
+            shape = it.Value()
+            isect_center = get_edge_midpoint(shape)
+            # Find the intersection of the plane with the stringer surface
+            plane_intersection = intersect_plane_with_plane(self._surface, gp_Pln(gp_Pnt(0, plane_y, 0), gp_Dir(0,1,0)))
+            #Translate the point along the intersection direction by the given distance
+            trans_dir = plane_intersection.Direction()
+            if abs(trans_dir.X()) > abs(trans_dir.Z()) and trans_dir.X() < 0:
+                trans_dir = gp_Dir(-trans_dir.X(), trans_dir.Y(), -trans_dir.Z())
+            elif abs(trans_dir.Z()) > abs(trans_dir.X()) and trans_dir.Z() > 0:
+                trans_dir = gp_Dir(-trans_dir.X(), trans_dir.Y(), -trans_dir.Z())
+            translated_point = gp_Pnt(
+                isect_center.X() + distance * trans_dir.X(),
+                # Don't need to change the Y coordinate, the plane is parallel to the XZ plane
+                plane_y,
+                isect_center.Z() + distance * trans_dir.Z()
+            )
+            x_dir = trans_dir
+            z_dir = x_dir.Crossed(gp_Dir(0,1,0)) # Normal to trans_dir and the Y axis
+            pos = gp_Ax2(translated_point, z_dir)
+            pos.SetXDirection(x_dir)
+            pos.SetYDirection(gp_Dir(0,1,0))
+            return pos
         return None

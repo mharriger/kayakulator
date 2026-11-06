@@ -205,6 +205,9 @@ class FuselageFrameKayakModelBuilder(KayakModelBuilder):
         return self._model
 
     def build_frame(self, frame_idx: int) -> FrameModel:
+        """
+        Build a single transverse frame
+        """
         if self._model is None or self._model._gunwale is None:
             raise RuntimeError("Stringers must be built before building frames")
         if frame(frame_idx) in self._model._frames:
